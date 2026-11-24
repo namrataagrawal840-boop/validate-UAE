@@ -189,6 +189,33 @@ def open_project(pid):
         store.save_project(user_id(), pid, result=ss.result)
     ss._explain = explain(ss.result)
     for k in ("lab_out",): ss.pop(k, None)
+    ensure_starter()
+
+
+def ensure_starter():
+    """Give every project something to work with from day one, once:
+    a simulated customer panel (labelled simulated, zero weight) and three starter hypotheses in the lab.
+    Real evidence still decides confidence; nothing here changes the forecast."""
+    from app import panel as PN
+    from app import lab as LB
+    st_ = ss.state; changed = False
+    if not st_.get("panel"):
+        try:
+            pn = PN.build(ss.result, n=40); pn["debate"] = PN.debate(pn, ss.result)
+            st_ = copy.deepcopy(st_); st_["panel"] = pn; changed = True
+        except Exception:  # a missing panel must never block opening a project
+            pass
+    if not st_.get("starter_hypotheses"):
+        try:
+            have = {h["metric"] for h in store.list_hypotheses(user_id(), ss.pid)}
+            for h in [x for x in LB.suggestions(ss.result) if x["metric"] not in have][:3]:
+                h = dict(h, status="planned", direction=LB.METRICS[h["metric"]][3]); h["plan"] = LB.plan(dict(h, id="new"), ss.result, ss.result["kit"])
+                store.add_hypothesis(user_id(), ss.pid, h)
+            st_ = copy.deepcopy(st_) if not changed else st_; st_["starter_hypotheses"] = True; changed = True
+        except Exception:
+            pass
+    if changed:
+        store.save_project(user_id(), ss.pid, state=st_); ss.state = st_
 
 
 def refresh(message=None, state=None):

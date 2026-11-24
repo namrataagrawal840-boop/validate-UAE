@@ -7,7 +7,7 @@ import streamlit as st
 from app import evidence as EV
 from app import store
 from ui import glossary as G
-from ui.common import ss, esc, pct, kpi, hbars, section, soft, refresh, user_id
+from ui.common import ss, esc, pct, kpi, hbars, section, soft, refresh, user_id, PASTEL
 
 TYPE_TONE = {"transactions": "good", "behaviour": "good", "feedback": "info", "secondary": "lav", "ai": "", "synthetic": ""}
 VER_TONE = {"verified": "good", "partly": "info", "unverified": "warn", "disputed": "bad"}
@@ -28,13 +28,36 @@ def page(r, state):
     rows = store.list_evidence(user_id(), ss.pid)
     real = [x for x in rows if EV.is_real(x)]
     hyps = store.list_hypotheses(user_id(), ss.pid)
+    sys_rows = EV.system_records(r, state)
+    pn = state.get("panel")
+    from app import panel as PN
+    sig = PN.signals(pn, r) if pn else None
+    with st.expander("How this page works"):
+        st.markdown("**Two kinds of numbers live here, and they are never mixed.**\n\n"
+                    "1. **Real evidence** (green): things that actually happened: sales, sign-ups, interviews you ran, quotes and reports. Each record gets a weight "
+                    "(type × verification × your confidence × geography × sample size × age). These, and only these, build **evidence confidence**. "
+                    "A new idea starts at 0% because nothing has been tested yet; that is the honest starting point, not an error.\n"
+                    "2. **Simulated and AI signals** (lavender): the customer panel, the market simulation and AI estimates. They show what is *likely*, "
+                    "so you are never looking at a blank page, but they carry zero weight.\n\n"
+                    "To raise confidence: record a result in the **Validation lab** (it is added here automatically) or add a quote, report or receipt with **➕ Add evidence**. "
+                    "Ten interviews or one landing-page test usually moves it within minutes.")
     k = st.columns(4)
-    kpi(k[0], 0, "Evidence confidence", pct(ev["strength"]), "Weighted by how much each area matters")
-    kpi(k[1], 1, "Real-world records", str(len(real)), "Transactions, behaviour, feedback, research")
-    kpi(k[2], 2, "AI and simulated records", str(len(rows) - len(real)), "Stored, zero weight")
-    covered = sum(1 for a in areas.values() if a["importance"] > 0 and a["confidence"] >= .5)
-    kpi(k[3], 3, "Areas with solid evidence", f"{covered} of {sum(1 for a in areas.values() if a['importance'] > 0)}", "Confidence of 50% or more")
+    kpi(k[0], 0, "Evidence confidence (real)", pct(ev["strength"]), "Starts at 0% until something is tested" if ev["strength"] == 0 else "From real evidence only")
+    kpi(k[1], 1, "Real-world records", str(len(real)), "Add one below or in the Validation lab" if not real else "Transactions, behaviour, feedback, research")
+    kpi(k[2], 2, "Simulated and AI signals", str(len(rows) - len(real) + len(sys_rows) + (1 if pn else 0)), "Shown for guidance, zero weight")
+    kpi(k[3], 3, "Simulated outlook", PN.synthesise(pn, r)["verdict"] if pn else "–", f"From {pn['n']} simulated customers" if pn else "Run a customer panel")
     st.write("")
+    if sig:
+        with st.container(border=True):
+            section("What the simulations suggest (not evidence)", "lavender", "From the customer panel and the market simulation. Use these to decide what to test first.")
+            cols = st.columns(len(sig))
+            for col, (key, x) in zip(cols, sig.items()):
+                bg, bd, fg = PASTEL["lavender"]
+                col.markdown(f'<div class="kpi" style="background:{bg};border-color:{bd}"><div class="l">{esc(x["label"])}</div><div class="v">{pct(x["value"])}</div>'
+                             f'<div class="s">{esc(x["text"])}</div></div>', unsafe_allow_html=True)
+            f = r["stages"]["forecast"]
+            st.caption(f"Market simulation: {pct(f['p_payback'])} of {f['runs']} simulated futures pay back within {f['horizon']} months. "
+                       f"{sum(1 for x in sys_rows if x['ev_type'] == 'ai')} inputs are AI estimates.")
     c1, c2 = st.columns([1.1, 1])
     with c1:
         with st.container(border=True):
@@ -58,7 +81,8 @@ def page(r, state):
     add_form(hyps)
     st.subheader(f"Records ({len(rows)})")
     if not rows:
-        st.caption("No records yet. Add evidence above, or record results in the Validation lab (they are added here automatically).")
+        st.markdown(soft("<b>No real evidence yet.</b> That's why evidence confidence is 0%. Fastest ways to start: run 10 short interviews with the questionnaire in the "
+                         "Validation lab and record the result, or add one supplier quote or market report with <b>➕ Add evidence</b>.", "butter"), unsafe_allow_html=True)
     flt = st.segmented_control("Show", ["All", "Real-world", "AI and simulated"], default="All", key="ev_filter")
     for x in rows:
         if flt == "Real-world" and not EV.is_real(x): continue
@@ -66,7 +90,6 @@ def page(r, state):
         record(x, hyps)
     with st.expander("What the AI agents and the simulation contributed (for transparency; zero weight)"):
         st.caption("These are generated, not observed. They are never used as evidence of what customers do.")
-        sys_rows = EV.system_records(r, state)
         st.dataframe(pd.DataFrame([dict(Claim=x["claim"], Type=EV.TYPES[x["ev_type"]][0], Area=EV.AREAS.get(x["area"], ("Other",))[0], Source=x.get("source_url") or x["description"][:80],
                                         Limitations=x["limitations"]) for x in sys_rows]), hide_index=True, width="stretch")
 

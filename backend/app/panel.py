@@ -358,3 +358,24 @@ def ask(persona, question, result, history=None):
               f"Idea: {result['idea']['brief']} Price AED {result['assumptions']['price']['likely']:,.0f}/month.\n{convo}\nFounder: {question}\n"
               'Answer in character in 1-4 sentences. JSON: {"answer": ""}')
     return str(_ai(prompt, max_tokens=600).get("answer", "")).strip()[:1200]
+
+
+# ---------------- simulated signals for the ledger and the lab (never evidence) ----------------
+def signals(panel, result):
+    """What the simulated panel suggests for each evidence area. Shown next to real evidence, never mixed into it."""
+    ps = panel["people"]; n = len(ps) or 1; price = panel["price"]
+    s = synthesise(panel, result)
+    return {
+        "market": dict(label="Would actually buy", value=s["actual_rate"], text=f"{s['actual_rate']:.1%} of simulated customers would likely buy"),
+        "pain": dict(label="Serious problem", value=sum(p["pain"] >= .6 for p in ps) / n, text=f"{sum(p['pain'] >= .6 for p in ps) / n:.0%} say the problem is serious"),
+        "price": dict(label="Accept the price", value=s["acceptance"], text=f"{s['acceptance']:.0%} would pay AED {price:,.0f} a month"),
+        "competition": dict(label="Loyal to alternatives", value=sum(p["objection"] in ("competitor", "switching") for p in ps) / n,
+                            text=f"{sum(p['objection'] in ('competitor', 'switching') for p in ps) / n:.0%} prefer what they use today"),
+        "trust": dict(label="Want proof first", value=sum(p["objection"] == "trust" for p in ps) / n, text=f"{sum(p['objection'] == 'trust' for p in ps) / n:.0%} want reviews or a trial first"),
+    }
+
+
+def metric_value(metric, panel, result):
+    """The simulated panel's answer to a lab hypothesis metric, or None where a panel can't say."""
+    sig = signals(panel, result)
+    return {"signup_rate": sig["market"]["value"], "price_acceptance": sig["price"]["value"], "pain_share": sig["pain"]["value"]}.get(metric)

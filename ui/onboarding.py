@@ -230,6 +230,8 @@ def finish(d, sales_v, link_rows):
             r = run_compute(state); r["_version"] = RESULT_VERSION
         store.save_project(user_id(), pid, result=r)
         ss.state, ss.result, ss.pname, ss.baseline, ss._explain = state, r, name, None, explain(r)
+        from ui.common import ensure_starter
+        ensure_starter()
         ss.view = "project"; ss.section = "Decision"; ss.pop("ob", None); store.delete_draft(user_id())
     except Exception as e:  # keep the user's answers; show what went wrong
         st.error(f"The analysis could not be completed: {e}. Your answers are kept; try again.")

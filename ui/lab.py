@@ -10,6 +10,7 @@ import streamlit as st
 
 from app import evidence as EV
 from app import lab as LB
+from app import panel as PN
 from app import store
 from app.funnel.validation import SUS_QUESTIONS
 from ui import report
@@ -132,19 +133,30 @@ def upload_form(hid, prefix):
         refresh("File added to the evidence ledger.")
 
 
-def compare_chart(h, ev):
+def compare_chart(h, ev, sim=None):
     unit = ev["unit"]
     fig = go.Figure()
-    xs = ["Expected by the model", "Your threshold", "Actual result"]
-    ys = [ev["expected"] or 0, ev["threshold"], ev["actual"] or 0]
-    cols = ["#c9cff7", "#f2e6b6", "#bfe3cf" if ev["status"] == "validated" else "#f3c9d1" if ev["status"] == "invalidated" else "#d6e6fa"]
-    fig.add_trace(go.Bar(x=xs, y=ys, marker_color=cols, text=[fmt(unit, v) if (i < 2 or ev["actual"] is not None) else "no data" for i, v in enumerate(ys)], textposition="outside", cliponaxis=False))
+    xs = ["Expected by the model", "Simulated panel", "Your threshold", "Real result"]
+    ys = [ev["expected"] or 0, sim or 0, ev["threshold"], ev["actual"] or 0]
+    cols = ["#c9cff7", "#e3defb", "#f2e6b6", "#bfe3cf" if ev["status"] == "validated" else "#f3c9d1" if ev["status"] == "invalidated" else "#d6e6fa"]
+    labels = [fmt(unit, ys[0]), fmt(unit, sim) if sim is not None else "n/a", fmt(unit, ys[2]), fmt(unit, ev["actual"]) if ev["actual"] is not None else "not tested yet"]
+    fig.add_trace(go.Bar(x=xs, y=ys, marker_color=cols, text=labels, textposition="outside", cliponaxis=False))
     fig.update_layout(**{**PLOT, "height": 220}, yaxis=dict(visible=False, range=[0, max(ys + [0.01]) * 1.3]), showlegend=False)
     chart(fig)
 
 
+def sim_outlook(h, r, state):
+    """What the simulated panel suggests for this hypothesis: (value, 'likely to pass'/'likely to fail') or (None, None)."""
+    pn = state.get("panel")
+    v = PN.metric_value(h["metric"], pn, r) if pn else None
+    if v is None: return None, None
+    ok = v >= h["threshold"] if LB.METRICS[h["metric"]][3] == ">=" else v <= h["threshold"]
+    return v, "likely to pass" if ok else "likely to fail"
+
+
 def hypothesis_card(h, r, state, kit):
     ev = LB.evaluate(dict(h, price=r["assumptions"]["price"]["likely"]), state.get("experiments") or [])
+    sim, outlook = sim_outlook(h, r, state)
     if ev["status"] != h["status"]:
         store.update_hypothesis(user_id(), ss.pid, h["id"], dict(status=ev["status"])); h["status"] = ev["status"]
     label, area, method, direction, unit, _ = LB.METRICS[h["metric"]]
@@ -152,15 +164,18 @@ def hypothesis_card(h, r, state, kit):
     with st.container(border=True):
         a, b = st.columns([4, 1.2])
         a.markdown(f"**{esc(h['statement'])}**  \n<span class='pill p-{tone}'>{t}</span><span class='pill'>{esc(label)} {direction} {fmt(unit, h['threshold'])}</span>"
-                   f"<span class='pill p-lav'>{esc(LB.METHOD_LABEL[method])}</span>", unsafe_allow_html=True)
+                   f"<span class='pill p-lav'>{esc(LB.METHOD_LABEL[method])}</span>"
+                   + (f"<span class='pill p-lav'>Simulated: {outlook} ({fmt(unit, sim)})</span>" if outlook else ""), unsafe_allow_html=True)
         b.markdown(f"<div style='text-align:right'><span class='muted' style='font-size:12.5px'>Data collected</span><br><b>{ev['n']:,}</b> / {ev['needed']:,} needed</div>", unsafe_allow_html=True)
         tabs = st.tabs(["Expected vs actual", "Plan", "Materials", "Record results", "Upload evidence", "Settings"])
         with tabs[0]:
             c1, c2 = st.columns([1.2, 1])
-            with c1: compare_chart(h, ev)
+            with c1: compare_chart(h, ev, sim)
             with c2:
                 if ev["actual"] is None:
-                    st.markdown(soft("No results yet. Nothing has changed: confidence and the forecast move only when you record a result.", "butter"), unsafe_allow_html=True)
+                    st.markdown(soft("<b>Not tested with real people yet.</b> " + (f"The simulated panel suggests this is {outlook} ({fmt(unit, sim)} vs your threshold "
+                                     f"{fmt(unit, h['threshold'])}), which tells you how risky it is, not whether it's true. " if outlook else "")
+                                     + "Run the plan, then record the result in <b>Record results</b>: only that changes confidence and the forecast.", "butter"), unsafe_allow_html=True)
                 else:
                     st.markdown(f"**Actual:** {fmt(unit, ev['actual'])} <span class='muted'>({esc(ev['detail'])})</span>", unsafe_allow_html=True)
                     if ev["probability"] is not None:
@@ -223,11 +238,22 @@ def page(r, state):
                      "<b>Confidence and the forecast change only when you record real results</b>: suggestions, plans and materials change nothing.", "lavender"), unsafe_allow_html=True)
     hyps = store.list_hypotheses(user_id(), ss.pid)
     evs = [LB.evaluate(dict(h, price=r["assumptions"]["price"]["likely"]), state.get("experiments") or []) for h in hyps]
+    outs = [sim_outlook(h, r, state)[1] for h in hyps]
+    with st.expander("How the lab works"):
+        st.markdown("1. **A hypothesis** is one risky belief written with a number, e.g. *at least 40% of parents we interview say this is a serious problem*. "
+                    "Three starter hypotheses are created from your biggest evidence gaps; add or delete your own.\n"
+                    "2. **The plan and materials** (steps, sample size, questionnaire, survey, landing-page copy) tell you exactly how to test it cheaply.\n"
+                    "3. **The simulated panel** gives an early guess (*likely to pass* or *likely to fail*) so you know which test matters most. It is a guess, not a result.\n"
+                    "4. **Record results** after you run the test with real people. The app then compares the real result with your threshold and marks it "
+                    "**Validated** (90%+ chance it meets the threshold), **Disproved** (10% or less) or **Needs more data**. The same result recalibrates the forecast "
+                    "and appears in the Evidence ledger, so evidence confidence goes up.\n\n"
+                    "So *Validated 0 · Disproved 0* simply means no real test has been recorded yet.")
     k = st.columns(4)
     kpi(k[0], 0, "Hypotheses", str(len(hyps)), "Each with a success threshold")
-    kpi(k[1], 1, "Validated", str(sum(e["status"] == "validated" for e in evs)), "90%+ chance of meeting the threshold")
-    kpi(k[2], 2, "Disproved", str(sum(e["status"] == "invalidated" for e in evs)), "Rethink the plan around these")
-    kpi(k[3], 3, "Waiting for data", str(sum(e["status"] in ("planned", "needs more data", "inconclusive") for e in evs)), "Planned, running or inconclusive")
+    kpi(k[1], 1, "Simulated outlook", f"{outs.count('likely to pass')} pass · {outs.count('likely to fail')} fail" if any(outs) else "–", "Customer panel's guess, not evidence")
+    kpi(k[2], 2, "Validated / disproved", f"{sum(e['status'] == 'validated' for e in evs)} / {sum(e['status'] == 'invalidated' for e in evs)}",
+        "By real results you record" if any(e["actual"] is not None for e in evs) else "Needs a real test result first")
+    kpi(k[3], 3, "Waiting for a real test", str(sum(e["status"] in ("planned", "needs more data", "inconclusive") for e in evs)), "Run the plan, then record results")
     G.expander(["Hypothesis", "Conversion rate", "Churn"])
     st.write("")
     existing = {h["metric"] for h in hyps}
