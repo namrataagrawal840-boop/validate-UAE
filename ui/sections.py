@@ -2,7 +2,7 @@
 import streamlit as st
 
 from app import store
-from ui import report, evidence, finance, insights, lab
+from ui import report, evidence, finance, insights, lab, decision
 from ui.common import ss, user_id
 
 
@@ -17,7 +17,7 @@ def header():
 
 
 SECTIONS = {
-    "Decision": report.tab_decision,
+    "Decision": decision.page,
     "Evidence ledger": evidence.page,
     "Validation lab": lab.page,
     "Financials": finance.page,
@@ -33,4 +33,4 @@ SECTIONS = {
 
 def render(name):
     header()
-    SECTIONS.get(name, report.tab_decision)(ss.result, ss.state)
+    SECTIONS.get(name, decision.page)(ss.result, ss.state)

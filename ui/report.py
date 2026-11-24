@@ -12,21 +12,22 @@ from app.funnel.validation import SUS_QUESTIONS
 from ui.common import *  # noqa: F401,F403
 from ui.common import ss, recompute, add_experiment, remove_experiment
 
-def tab_decision(r, state):
+def tab_decision(r, state, show_header=True):
     f, dec, L, ag, v = r["stages"]["forecast"], r["decision"], r["limits"], state.get("agents", {}), r["validation"]
-    st.markdown(f'<div class="banner b-{dec["code"]}"><div class="k">{r["intake"]["emirate"]} · {r["intake"]["setup"]} · {r["idea"]["brief"]}</div><h2>{dec["label"]}</h2>'
-                + "".join(f"<div>• {x}</div>" for x in dec["reasons"]) + "</div>", unsafe_allow_html=True)
-    c = st.columns([1, 1, 1, 3]);
-    with c[0]: math("decision", "How this is decided")
-    summary = summary_text(r)
-    c[1].download_button("Download summary", summary, file_name="validateuae-summary.txt", width="stretch")
-    c[2].download_button("Export project data", json.dumps(ss.state, default=str), file_name="validateuae-project.json", width="stretch", help="Your inputs and research as JSON")
-    cols = st.columns(4)
-    kpi(cols[0], 0, f"Chance of paying back in {f['horizon']} months", pct(f["p_payback"]), f"You need at least {pct(L['min_payback'])}", "p_payback")
-    kpi(cols[1], 1, "Chance of needing more than your budget", pct(f["p_ruin"]), f"Limit {pct(L['max_ruin'])} · budget {aed(L['budget'])}", "p_ruin")
-    kpi(cols[2], 2, "Expected value (NPV)", aed(f["npv_mean"]), f"Bad {aed(f['npv_p10'])} · good {aed(f['npv_p90'])}", "npv")
-    kpi(cols[3], 3, "Evidence strength", pct(r["evidence"]["strength"]), "Inputs backed by sources or measurements", "evidence")
-    st.write("")
+    if show_header:
+        st.markdown(f'<div class="banner b-{dec["code"]}"><div class="k">{esc(r["intake"]["emirate"])} · {esc(r["intake"]["setup"])} · {esc(r["idea"]["brief"])}</div><h2>{dec["label"]}</h2>'
+                    + "".join(f"<div>• {esc(x)}</div>" for x in dec["reasons"]) + "</div>", unsafe_allow_html=True)
+        c = st.columns([1, 1, 1, 3]);
+        with c[0]: math("decision", "How this is decided")
+        summary = summary_text(r)
+        c[1].download_button("Download summary", summary, file_name="validateuae-summary.txt", width="stretch")
+        c[2].download_button("Export project data", json.dumps(ss.state, default=str), file_name="validateuae-project.json", width="stretch", help="Your inputs and research as JSON")
+        cols = st.columns(4)
+        kpi(cols[0], 0, f"Chance of paying back in {f['horizon']} months", pct(f["p_payback"]), f"You need at least {pct(L['min_payback'])}", "p_payback")
+        kpi(cols[1], 1, "Chance of needing more than your budget", pct(f["p_ruin"]), f"Limit {pct(L['max_ruin'])} · budget {aed(L['budget'])}", "p_ruin")
+        kpi(cols[2], 2, "Expected value (NPV)", aed(f["npv_mean"]), f"Bad {aed(f['npv_p10'])} · good {aed(f['npv_p90'])}", "npv")
+        kpi(cols[3], 3, "Evidence strength", pct(r["evidence"]["strength"]), "Inputs backed by sources or measurements", "evidence")
+        st.write("")
     c1, c2 = st.columns(2)
     with c1:
         with st.container(border=True):

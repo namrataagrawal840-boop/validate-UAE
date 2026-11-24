@@ -160,18 +160,23 @@ def gaps(areas, leak_rows=None, top=6):
     """Evidence gaps ranked by importance x missing confidence. Importance uses the leak analysis where available."""
     from .funnel.decide import LEAK_STAGE
     share = {("market" if r["key"] in ("market", "p", "q") else "price" if r["key"] == "arpu" else r["key"]): r["variance_share"] for r in (leak_rows or [])}
-    how = {"market": "Landing-page or pre-order test with real visitors", "pain": "10-15 customer interviews with the questionnaire in the lab",
-           "price": "Pricing test at two prices or a Van Westendorp survey", "cac": "Small paid-ads test with a fixed budget",
-           "churn": "Paid pilot with 15-20 customers for 2 months", "fixed": "Three written quotes for rent, staff and licence",
-           "var_pct": "Supplier quotes and delivery-platform commission terms", "setup": "Fit-out, equipment and licence quotes",
-           "capacity": "Time a trial day of operations", "competition": "Mystery-shop 3 competitors and record prices and features",
-           "regulation": "Confirm the licence activity with the economic department or free zone"}
+    how = HOW
     rows = []
     for a, x in areas.items():
         if a == "other" or x["importance"] == 0: continue
         imp = max(x["importance"], share.get(a, 0))
         miss = 1 - x["confidence"]
         if miss < .15: continue
-        rows.append(dict(area=a, name=x["name"], confidence=x["confidence"], priority=float(imp * miss), how=how.get(a, LEAK_STAGE.get(a, ("", "Collect evidence"))[1])))
+        rows.append(dict(area=a, name=x["name"], confidence=x["confidence"], priority=float(imp * miss), how=how.get(a, LEAK_STAGE.get(a, ("", "Collect evidence"))[1]),
+                         where="Validation lab" if a in LAB_AREAS else "Evidence ledger"))
     rows.sort(key=lambda r: -r["priority"])
     return rows[:top]
+
+
+LAB_AREAS = {"market", "pain", "price", "cac", "churn"}  # tested with experiments; the others are documented with quotes or sources
+HOW = {"market": "Landing-page or pre-order test with real visitors", "pain": "10-15 customer interviews with the questionnaire in the lab",
+           "price": "Pricing test at two prices or a Van Westendorp survey", "cac": "Small paid-ads test with a fixed budget",
+           "churn": "Paid pilot with 15-20 customers for 2 months", "fixed": "Three written quotes for rent, staff and licence",
+           "var_pct": "Supplier quotes and delivery-platform commission terms", "setup": "Fit-out, equipment and licence quotes",
+           "capacity": "Time a trial day of operations", "competition": "Mystery-shop 3 competitors and record prices and features",
+        "regulation": "Confirm the licence activity with the economic department or free zone"}

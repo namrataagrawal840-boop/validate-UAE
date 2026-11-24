@@ -14,6 +14,7 @@ from .funnel import validation as V
 from .funnel import competition as CP
 from . import evidence as EVD
 from .funnel import finance as FIN
+from . import brief as BR
 
 CREDIT = EVD.LABEL_CREDIT  # kept for compatibility
 LABEL = {"measured": "Measured", "benchmarked": "Benchmarked (your source)", "web": "Benchmarked (web source)", "founder": "Founder input",
@@ -294,6 +295,7 @@ def compute(state, light=False):
     result["finance"] = FIN.analyse(sim, S, unit, A, limits["budget"], t["open_months"], horizon)
     result["kill_criteria"] = kill_criteria(result, limits)
     result["next_steps"] = next_steps(result)
+    result["brief"] = BR.build(result, state)
     return result
 
 
