@@ -28,7 +28,7 @@ def page():
             p = st.text_input("Password", type="password", autocomplete="current-password")
             if st.form_submit_button("Log in", type="primary", width="stretch"):
                 try:
-                    ss.user = store.authenticate(u, p); st.rerun()
+                    ss.user = store.authenticate(u, p); remember(); st.rerun()
                 except store.AuthError as e:
                     st.error(str(e))
         if signup_ok:
@@ -41,13 +41,19 @@ def page():
                         st.error("The two passwords do not match.")
                     else:
                         try:
-                            ss.user = store.create_user(u, p); st.rerun()
+                            ss.user = store.create_user(u, p); remember(); st.rerun()
                         except store.AuthError as e:
                             st.error(str(e))
         st.caption(f"Projects are private to your account. Storage: {store.backend_name()}.")
 
 
+def remember():
+    """Keep the user signed in across page reloads for 7 days (a signed key in the page address)."""
+    st.query_params.from_dict({"s": store.make_token(ss.user["id"], hours=24 * 7)})
+
+
 def logout():
     for k in list(ss.keys()):
         del ss[k]
+    st.query_params.clear()
     st.rerun()

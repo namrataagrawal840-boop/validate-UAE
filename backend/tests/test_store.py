@@ -50,3 +50,14 @@ def test_evidence_file_hypothesis_and_actuals_roundtrip():
 def test_tokens():
     t = store.make_token("u1"); assert store.read_token(t) == "u1"
     with pytest.raises(store.AuthError): store.read_token(t[:-2] + "00")
+
+
+def test_signin_key_and_draft_survive_restart(monkeypatch):
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+    u = store.create_user("dana", "s3cure-pass")["id"]
+    t = store.make_token(u)
+    store.save_draft(u, {"step": 2, "data": {"idea": "x"}})
+    store.reset_engine()  # simulates an app restart: in-memory key forgotten, database kept
+    assert store.read_token(t) == u
+    assert store.load_draft(u)["step"] == 2
+    store.delete_draft(u); assert store.load_draft(u) is None

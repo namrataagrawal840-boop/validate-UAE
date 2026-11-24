@@ -29,8 +29,15 @@ DEFAULTS = dict(name="", idea="", business_type="cafe", problem="", different=""
 
 
 def _ob():
-    if "ob" not in ss: ss.ob = dict(step=0, data=dict(DEFAULTS))
+    if "ob" not in ss:
+        draft = store.load_draft(user_id())  # answers saved before a reload
+        ss.ob = dict(step=int(draft.get("step", 0)), data={**DEFAULTS, **draft.get("data", {})}) if draft else dict(step=0, data=dict(DEFAULTS))
+        ss.ob_restored = bool(draft)
     return ss.ob
+
+
+def _save_draft():
+    store.save_draft(user_id(), ss.ob)
 
 
 def stepper(i):
@@ -53,14 +60,19 @@ def nav(form_i, optional=True, last=False):
 
 def page():
     ob = _ob(); i = ob["step"]; d = ob["data"]
-    st.header("New project")
+    c1, c2 = st.columns([4, 1])
+    c1.header("New project")
+    if c2.button("Start over", width="stretch", help="Clear the answers and begin again"):
+        store.delete_draft(user_id()); ss.pop("ob", None); st.rerun()
+    if ss.pop("ob_restored", False):
+        st.info("Welcome back: your unfinished answers were restored.")
     stepper(i)
     if i == 0:
         st.markdown("**Start from an example** <span class='muted'>(fills in the form; you can change everything)</span>", unsafe_allow_html=True)
         cols = st.columns(3)
         for n, x in enumerate(EXAMPLES):
             if cols[n].button(x["name"], key=f"ex{n}", width="stretch", help=x["idea"]):
-                d.update(x); st.rerun()
+                d.update(x); _save_draft(); st.rerun()
         with st.form("ob0"):
             st.subheader("1. The business idea")
             idea = st.text_area("Describe the idea in plain words (required)", d["idea"], height=110,
@@ -78,7 +90,7 @@ def page():
             if len(idea.strip()) < 20:
                 st.error("Describe the idea in at least one full sentence (20 characters or more).")
             else:
-                d.update(idea=idea.strip()[:2000], business_type=bt, name=name.strip()[:120], problem=prob[:300], different=diff[:300]); ob["step"] = 1; st.rerun()
+                d.update(idea=idea.strip()[:2000], business_type=bt, name=name.strip()[:120], problem=prob[:300], different=diff[:300]); ob["step"] = 1; _save_draft(); st.rerun()
     elif i == 1:
         with st.form("ob1"):
             st.subheader("2. Market and customer")
@@ -94,7 +106,7 @@ def page():
             back, skip, nxt = nav(1)
         if back or skip or nxt:
             if not skip: d.update(emirate=em, setup=setup, target_customer=cust[:300], competitors=comps[:3000])
-            ob["step"] = 0 if back else 2; st.rerun()
+            ob["step"] = 0 if back else 2; _save_draft(); st.rerun()
     elif i == 2:
         t = P.TYPES[d["business_type"]]
         with st.form("ob2"):
@@ -119,7 +131,7 @@ def page():
             if not skip:
                 d.update(budget_aed=float(budget), horizon_months=horizon, min_payback_probability=minp, max_ruin_probability=maxr, price=price, fixed=fixed,
                          setup_budget=setupc, marketing_budget_aed=mkt)
-            ob["step"] = 1 if back else 3; st.rerun()
+            ob["step"] = 1 if back else 3; _save_draft(); st.rerun()
     else:
         with st.form("ob3"):
             st.subheader("4. Evidence you already have")
@@ -141,7 +153,7 @@ def page():
                                  if ai_ok else "Add ANTHROPIC_API_KEY to the app's secrets to enable.")
             back, _, nxt = nav(3, last=True)
         if back:
-            ob["step"] = 2; st.rerun()
+            ob["step"] = 2; _save_draft(); st.rerun()
         if nxt:
             errs = []
             if k > n: errs.append("Interviewees with a serious problem cannot exceed the number interviewed.")
@@ -218,7 +230,7 @@ def finish(d, sales_v, link_rows):
             r = run_compute(state); r["_version"] = RESULT_VERSION
         store.save_project(user_id(), pid, result=r)
         ss.state, ss.result, ss.pname, ss.baseline, ss._explain = state, r, name, None, explain(r)
-        ss.view = "project"; ss.section = "Decision"; ss.pop("ob", None)
+        ss.view = "project"; ss.section = "Decision"; ss.pop("ob", None); store.delete_draft(user_id())
     except Exception as e:  # keep the user's answers; show what went wrong
         st.error(f"The analysis could not be completed: {e}. Your answers are kept; try again.")
         return

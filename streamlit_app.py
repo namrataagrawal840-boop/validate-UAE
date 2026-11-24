@@ -27,10 +27,45 @@ log = logging.getLogger("validateuae")
 
 from app import store  # noqa: E402
 from ui import auth, dashboard, onboarding, glossary  # noqa: E402
-from ui.common import ss, styles, esc, pill_status, user_id  # noqa: E402
+from ui.common import ss, styles, esc, pill_status, user_id, open_project  # noqa: E402
 from ui import sections  # noqa: E402
 
 styles()
+
+
+def restore_session():
+    """A page reload starts a new Streamlit session. The page address keeps a signed sign-in key (s),
+    the open project (p) and section (sec), so the user comes straight back to where they were."""
+    qp = st.query_params
+    if not ss.get("user") and qp.get("s"):
+        try:
+            ss.user = store.get_user(store.read_token(qp["s"]))
+        except (store.AuthError, store.NotFound):
+            st.query_params.clear(); return
+    if ss.get("user") and qp.get("p") and not ss.get("pid") and not ss.get("_restored"):
+        ss._restored = True
+        try:
+            open_project(qp["p"]); ss.view = "project"; ss.section = qp.get("sec", "Decision")
+        except store.NotFound:
+            del st.query_params["p"]
+    if ss.get("user") and qp.get("v") == "new" and not ss.get("view"):
+        ss.view = "new"
+
+
+def sync_address():
+    """Write where the user is into the page address (only ids, never data)."""
+    want = {"s": st.query_params.get("s")}
+    v = ss.get("view", "dashboard")
+    if v == "project" and ss.get("pid"):
+        want.update(p=ss.pid, sec=ss.get("section", "Decision"))
+    elif v == "new":
+        want["v"] = "new"
+    want = {k: x for k, x in want.items() if x}
+    if dict(st.query_params) != want:
+        st.query_params.from_dict(want)
+
+
+restore_session()
 
 
 def guarded(fn, *args):
@@ -86,6 +121,9 @@ else:
         guarded(sections.render, ss.get("section", "Decision"))
     else:
         guarded(dashboard.page)
+
+if ss.get("user"):
+    sync_address()
 
 st.markdown('<p class="muted" style="margin-top:40px;font-size:12.5px">ValidateUAE is decision support, not financial advice. Typical figures and the simulated population are illustrative; '
             'simulated and AI-generated figures are never real customer behaviour.</p>', unsafe_allow_html=True)

@@ -49,6 +49,7 @@ hypotheses = Table("hypotheses", meta,
                    Column("statement", Text), Column("area", String(32)), Column("metric", String(32)), Column("method", String(32)),
                    Column("expected", Float), Column("threshold", Float), Column("direction", String(4)), Column("status", String(16)),
                    Column("plan", Text), Column("created_at", String(32)), Column("updated_at", String(32)))
+kv = Table("app_settings", meta, Column("key", String(120), primary_key=True), Column("value", Text))
 actuals = Table("actuals", meta,
                 Column("id", String(36), primary_key=True), Column("project_id", String(36), ForeignKey("projects.id"), index=True, nullable=False),
                 Column("month", Integer, nullable=False), Column("revenue", Float), Column("expenses", Float), Column("customers", Float),
@@ -85,7 +86,8 @@ def engine():
 
 def reset_engine():
     """For tests: forget the cached engine so a new DB_PATH / DATABASE_URL is used."""
-    global _engine
+    global _engine, _SECRET
+    _SECRET = None
     if _engine is not None: _engine.dispose()
     _engine = None
 
@@ -159,11 +161,55 @@ def get_user(user_id):
 
 
 # ---------------- signed session tokens (for the API) ----------------
+def get_kv(key):
+    with engine().connect() as c:
+        r = c.execute(select(kv.c.value).where(kv.c.key == key)).first()
+    return r[0] if r else None
+
+
+def set_kv(key, value):
+    with engine().begin() as c:
+        if c.execute(select(kv.c.key).where(kv.c.key == key)).first(): c.execute(update(kv).where(kv.c.key == key).values(value=value))
+        else: c.execute(insert(kv).values(key=key, value=value))
+
+
+def del_kv(key):
+    with engine().begin() as c:
+        c.execute(delete(kv).where(kv.c.key == key))
+
+
+_SECRET = None
+
+
 def _secret():
-    s = os.getenv("SECRET_KEY")
-    if not s:
-        s = os.environ["SECRET_KEY"] = secrets.token_hex(32)  # random per process: tokens stop working after a restart
-    return s.encode()
+    """SECRET_KEY from the environment, otherwise a random key created once and kept in the database,
+    so sign-ins survive app restarts without any setup."""
+    global _SECRET
+    if os.getenv("SECRET_KEY"): return os.environ["SECRET_KEY"].encode()
+    if _SECRET is None:
+        k = get_kv("secret_key")
+        if not k:
+            k = secrets.token_hex(32)
+            try:
+                set_kv("secret_key", k)
+            except Exception:  # another process created it at the same moment
+                k = get_kv("secret_key") or k
+        _SECRET = k
+    return _SECRET.encode()
+
+
+# ---------------- unfinished new-project answers ----------------
+def save_draft(user_id, data):
+    set_kv(f"draft:{user_id}", json.dumps(data, default=_default))
+
+
+def load_draft(user_id):
+    v = get_kv(f"draft:{user_id}")
+    return json.loads(v) if v else None
+
+
+def delete_draft(user_id):
+    del_kv(f"draft:{user_id}")
 
 
 def make_token(user_id, hours=12):
