@@ -105,7 +105,7 @@ def value_overrides(ledger, today=None):
 def from_experiment(e, intake=None):
     """Ledger record for a result entered in the validation lab (linked by experiment_id)."""
     today = e.get("date") or dt.date.today().isoformat()
-    where = "target"
+    where = e.get("geography") or "target"
     base = dict(experiment_id=e.get("id"), hypothesis_id=e.get("hypothesis_id"), collected_on=today, geography=where, verification="partly",
                 confidence="medium", source_url=e.get("source_url") or "", limitations=e.get("limitations") or "Self-reported by the founder.")
     k = e["kind"]

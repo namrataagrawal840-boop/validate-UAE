@@ -475,6 +475,11 @@ def tab_experiments(r, state):
         c1.markdown(f"{pill('Measured', 'good')} {e['kind']}: " + ", ".join(f"{a}={b}" for a, b in e.items() if a not in ('kind', 'rows', 'points', 'sales', 'sus'))[:160], unsafe_allow_html=True)
         if c2.button("Remove", key=f"rmx{i}"):
             remove_experiment(i)
+    experiment_charts(r)
+
+
+def experiment_charts(r):
+    ev = r["stages"]["experiments"]["evidence"]
     if ev.get("vw"):
         with st.container(border=True):
             st.subheader("Van Westendorp price range"); vw = ev["vw"]; c = st.columns(4)
