@@ -1,0 +1,14 @@
+# One-click deploy on Render: New > Blueprint > pick this repository.
+services:
+  - type: web
+    name: validate-uae
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false          # Render asks you to paste it; it is never stored in the code
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-5-5
+      - key: WEB_SEARCH_TOOL
+        value: web_search_20250305
