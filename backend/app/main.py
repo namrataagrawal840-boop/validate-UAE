@@ -149,12 +149,17 @@ class Point(BaseModel):
 
 
 class Experiment(BaseModel):
-    kind: Literal["landing", "pricing", "interviews", "pilot", "ab"]
+    kind: Literal["landing", "pricing", "interviews", "pilot", "ab", "vanwestendorp", "usability", "sales"]
     visitors: Optional[int] = Field(None, gt=0); signups: Optional[int] = Field(None, ge=0); spend: Optional[float] = Field(None, gt=0)
     pay_rate: float = Field(30, gt=0, le=100)
     points: list[Point] = []
     n: Optional[int] = Field(None, gt=0); k: Optional[int] = Field(None, ge=0)
     customers: Optional[int] = Field(None, gt=0); months: Optional[float] = Field(None, gt=0); lost: Optional[int] = Field(None, ge=0)
+    promoters: Optional[int] = Field(None, ge=0); passives: Optional[int] = Field(None, ge=0); detractors: Optional[int] = Field(None, ge=0)
+    rows: list[list[float]] = []
+    users: Optional[int] = Field(None, gt=0); tasks_done: Optional[int] = Field(None, ge=0); tasks_total: Optional[int] = Field(None, gt=0)
+    sus: list[float] = []
+    sales: list[float] = []
     name: str = ""; label_a: str = "A"; label_b: str = "B"
     nA: Optional[int] = Field(None, gt=0); kA: Optional[int] = Field(None, ge=0); nB: Optional[int] = Field(None, gt=0); kB: Optional[int] = Field(None, ge=0)
 
@@ -163,8 +168,13 @@ class Experiment(BaseModel):
                "pricing": not self.points or any(p.k > p.n for p in self.points),
                "interviews": self.n is None or self.k is None or self.k > self.n,
                "pilot": self.customers is None or self.months is None or self.lost is None or self.lost > self.customers * self.months,
-               "ab": None in (self.nA, self.kA, self.nB, self.kB) or self.kA > self.nA or self.kB > self.nB}[self.kind]
-        if bad: raise HTTPException(422, "Check the numbers: counts must be filled in and successes cannot exceed the total.")
+               "ab": None in (self.nA, self.kA, self.nB, self.kB) or self.kA > self.nA or self.kB > self.nB,
+               "vanwestendorp": len(self.rows) < 5 or any(len(r) != 4 or min(r) <= 0 or not (r[0] <= r[1] <= r[2] <= r[3]) for r in self.rows),
+               "usability": self.users is None or self.tasks_done is None or self.tasks_total is None or self.tasks_done > self.tasks_total or any(not 0 <= x <= 100 for x in self.sus),
+               "sales": len(self.sales) < 4 or min(self.sales) < 0}[self.kind]
+        if bad: raise HTTPException(422, {"vanwestendorp": "Enter at least 5 answers, each as four prices in order: too cheap ≤ cheap ≤ expensive ≤ too expensive.",
+                                          "usability": "Enter users and tasks; completed tasks cannot exceed the total; SUS scores are 0 to 100.",
+                                          "sales": "Enter at least 4 months of sales, none negative."}.get(self.kind, "Check the numbers: counts must be filled in and successes cannot exceed the total."))
         return {k: v for k, v in self.model_dump().items() if v not in (None, [], "")}
 
 
@@ -234,6 +244,33 @@ def apply(id: str, o: Overrides):
 def reset(id: str):
     def m(s): s["overrides"] = {}; s["settings"] = {}
     return recompute(id, m)
+
+
+class VariantPick(BaseModel):
+    variant_id: str = Field(min_length=1, max_length=120)
+
+
+@app.post("/api/analyses/{id}/variants")
+def apply_variant(id: str, v: VariantPick):
+    d = load(id)
+    found = next((x for x in ((d["result"] or {}).get("improve") or {}).get("variants", []) if x["id"] == v.variant_id), None)
+    if not found: raise HTTPException(404, "No such variant")
+    def m(s):
+        if all(a["id"] != found["id"] for a in s.get("applied", [])):
+            s.setdefault("applied", []).append(dict(id=found["id"], name=found["name"], changes=found["changes"]))
+    return recompute(id, m)
+
+
+@app.delete("/api/analyses/{id}/variants/{vid}")
+def remove_variant(id: str, vid: str):
+    def m(s): s["applied"] = [a for a in s.get("applied", []) if a["id"] != vid]
+    return recompute(id, m)
+
+
+@app.get("/api/sus-questions")
+def sus_questions():
+    from .funnel.validation import SUS_QUESTIONS
+    return SUS_QUESTIONS
 
 
 class Outcome(BaseModel):

@@ -65,7 +65,7 @@ Probabilities and amounts are passed on, never yes/no labels.
 *Shared across agents, per run:*
 - Markov regime: normal 1, boom 1.12, downturn 0.85
 - summer and Ramadan factors by business type
-- shocks with monthly probability λ ∈ {0, 2%, 4.5%, 8%}: competitor (demand 0.7, churn 1.3, 6 months), downturn (0.75, 8 months), cost jump (fixed costs 1.2, 12 months), rule change (one month of fixed costs, demand 0.9, 3 months), viral (1.8, 2 months)
+- shocks with monthly probability λ ∈ {0, 2%, 4.5%, 8%}: competitor (demand 0.7, churn 1.3, 6 months), downturn (0.75, 8 months), cost jump (fixed costs 1.2, 12 months), rule change (one month of fixed costs, demand 0.9, 3 months), viral (1.8, 2 months), tourism dip (0.85, 3 months)
 
 *Money:* profit = Σ customers · spend · (1 − v) − fixed costs · shock factor − new customers · CAC − one-off shock costs. NPV is discounted at 12% a year.
 
@@ -95,6 +95,36 @@ Probabilities and amounts are passed on, never yes/no labels.
 - revenue concentration
 - optimism flags
 - calibration over recorded outcomes (Brier score)
+
+## Business-validation modules (`validation.py`)
+
+**Validation score.** Score = Σ w_k · score_k, with weights money 0.30, customers 0.25, market 0.20, competition 0.15 and ease of use 0.10. Checks that were not assessed are dropped and the weights rescaled. Range width = 6 + 20 · (1 − evidence) + 2 · critic flags (up to 5) + 10 · (closeness of P(payback) to 0.5).
+
+**Market sizing.**
+- TAM = category spend in the focus area (simulated market).
+- SAM = TAM × catchment.
+- SOM bottom-up = median customers at the end of the simulation × spend × 12.
+- SOM top-down comes from the market agent. A gap above 3× is flagged.
+
+**Value gap.** Value ratio = exp of the P(buy)-weighted mean of ln(WTP ÷ price). Score = 50 + 50 · tanh(ratio − 1).
+
+**Variants.** Changes are applied to the model inputs. A price change also re-runs the choice model. Each variant is replayed 25 times with the same seed as the current plan. The top three by gain are crossed in pairs (changes added together), and a child is kept only if its E[NPV] beats both parents and its P(payback) is not worse by more than 2 points. Applied variants are stored and re-applied before every computation.
+
+**Van Westendorp.** Cumulative too cheap / cheap / expensive / too expensive curves.
+- OPP = too cheap ∩ too expensive
+- IPP = cheap ∩ expensive
+- PMC = too cheap ∩ not cheap
+- PME = too expensive ∩ not expensive
+
+The share accepting the planned price (above too cheap and below too expensive) is added to the pricing evidence and calibrates the buying model.
+
+**SUS.** (Σ odd answers − 1 + Σ 5 − even answers) × 2.5. Grades: 80.3 or more excellent, 68 or more good, 51 or more below average. Usability score = 50% task success + 50% mean SUS; it replaces the AI review.
+
+**NPS.** (promoters − detractors) ÷ n. Satisfaction in the simulation = (promoters + 0.5 · passives) ÷ n.
+
+**Holt forecast.** Level and trend exponential smoothing. α and β are chosen on a grid by one-step-ahead squared error. The 80% interval is ±1.28 · σ · √h.
+
+**Self-consistency.** A second AI estimate without web search. If the likely values differ by more than 1.5×, the range is widened to cover both.
 
 ## Honesty rules
 - Synthetic data is for stress-testing, not evidence. Real data always outweighs it.

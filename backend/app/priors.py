@@ -23,6 +23,7 @@ SHOCKS = {
     "cost":       dict(label="Rent renewal or supplier price jump", dm=1.0, cm=1.0, fm=1.2, months=12, weight=.25, one_off=0),
     "regulation": dict(label="Licence or rule change", dm=.90, cm=1.0, fm=1.0, months=3, weight=.15, one_off=1),
     "viral":      dict(label="Viral moment / press coverage", dm=1.8, cm=.9, fm=1.0, months=2, weight=.15, one_off=0),
+    "tourism":    dict(label="Tourism dip (fewer visitors, events cancelled)", dm=.85, cm=1.0, fm=1.0, months=3, weight=.10, one_off=0),
 }
 SHOCK_RATE = {0: 0.0, 1: 0.02, 2: 0.045, 3: 0.08}  # chance of a new shock each month
 REGIMES = {"names": ["normal", "boom", "downturn"], "mult": [1.0, 1.12, .85],

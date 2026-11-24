@@ -99,3 +99,9 @@ summary { cursor: pointer; font-weight: 600; }
   .topbar .container { flex-wrap: wrap; gap: 4px; padding-top: 6px; }
 }
 @media (prefers-reduced-motion: no-preference) { .dot.working { animation: pulse 1.2s ease-in-out infinite; } @keyframes pulse { 50% { opacity: .5; } } }
+
+@media print {
+  .topbar, .noprint, button, .footer { display: none !important; }
+  body { background: #fff; } .card, .stat { box-shadow: none; break-inside: avoid; }
+  .decision { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

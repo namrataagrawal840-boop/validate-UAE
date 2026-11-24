@@ -5,9 +5,10 @@ import { aed, pct, num, monthsText, LABEL, safeUrl, host } from '@/lib/fmt';
 import { makeExplain } from '@/lib/explain';
 import { Badge, LabelBadge, Stat, HBar, MathProvider, MathButton, scoreTone, scoreWord, Source } from './ui';
 import { FanChart, CurveChart, Tornado } from './charts';
+import { ValidationCard, IdeaCard, summaryText, MarketSizing, CustomerValue, Improve, Kit, ExtraResults, SusHelper } from './Extra';
 
-const TABS = [['decision', 'Decision'], ['funnel', 'Funnel'], ['lab', 'What-if lab'], ['experiments', 'Experiments'], ['audit', 'Audit'], ['sources', 'Assumptions & sources']];
-const AGENT_NAMES: Record<string, string> = { orch: 'Orchestrator', market: 'Market agent', customer: 'Customer agent', competition: 'Competition agent', finance: 'Finance agent', regulation: 'Regulation agent', usability: 'Ease-of-use agent', critic: 'Critic', offline: 'Offline mode', funnel: 'Decision funnel' };
+const TABS = [['decision', 'Decision'], ['funnel', 'Funnel'], ['value', 'Customer value'], ['improve', 'Improve my idea'], ['lab', 'What-if lab'], ['experiments', 'Experiments'], ['audit', 'Audit'], ['sources', 'Assumptions & sources']];
+const AGENT_NAMES: Record<string, string> = { consistency: 'Consistency checker', kit: 'Experiment writer', orch: 'Orchestrator', market: 'Market agent', customer: 'Customer agent', competition: 'Competition agent', finance: 'Finance agent', regulation: 'Regulation agent', usability: 'Ease-of-use agent', critic: 'Critic', offline: 'Offline mode', funnel: 'Decision funnel' };
 
 export default function Report({ id }: { id: string }) {
   const [d, setD] = useState<any>(null); const [err, setErr] = useState(''); const [tab, setTab] = useState('decision');
@@ -36,6 +37,8 @@ export default function Report({ id }: { id: string }) {
           <>
             {tab === 'decision' && <Decision d={d} go={go} />}
             {tab === 'funnel' && <Funnel d={d} go={go} />}
+            {tab === 'value' && <CustomerValue d={d} />}
+            {tab === 'improve' && <Improve d={d} setD={setD} />}
             {tab === 'lab' && <Lab d={d} setD={setD} />}
             {tab === 'experiments' && <Experiments d={d} setD={setD} />}
             {tab === 'audit' && <Audit d={d} />}
@@ -48,7 +51,7 @@ export default function Report({ id }: { id: string }) {
 }
 
 function Progress({ d }: { d: any }) {
-  const order = ['orch', 'market', 'customer', 'competition', 'finance', 'regulation', 'usability', 'critic', 'offline', 'funnel'];
+  const order = ['orch', 'market', 'customer', 'competition', 'finance', 'regulation', 'usability', 'consistency', 'kit', 'critic', 'offline', 'funnel'];
   const p = [...(d.progress || [])].sort((a, b) => order.indexOf(a.stage) - order.indexOf(b.stage));
   return (
     <div className="card" style={{ maxWidth: 760, margin: '0 auto' }}>
@@ -70,7 +73,7 @@ function Decision({ d, go }: { d: any; go: (t: string) => void }) {
         <div className="kicker">{r.intake.emirate} · {r.intake.setup} · decision for: {brief}</div>
         <h1>{dec.label}</h1>
         <ul>{dec.reasons.map((x: string, i: number) => <li key={i}>{x}</li>)}</ul>
-        <div style={{ marginTop: 10 }}><MathButton k="decision" text="How this decision is made" /></div>
+        <div className="row" style={{ marginTop: 10 }}><MathButton k="decision" text="How this decision is made" /><span className="noprint row"><button className="link small" onClick={() => navigator.clipboard?.writeText(summaryText(d))}>Copy summary</button><button className="link small" onClick={() => print()}>Save as PDF</button></span></div>
       </div>
       <div className="grid g4">
         <Stat label={`Chance of paying back in ${f.horizon} months`} value={pct(f.p_payback)} sub={`You need at least ${pct(L.min_payback)}`} math="p_payback" />
@@ -78,6 +81,8 @@ function Decision({ d, go }: { d: any; go: (t: string) => void }) {
         <Stat label="Expected value (NPV)" value={aed(f.npv_mean)} sub={`Bad case ${aed(f.npv_p10)} · good case ${aed(f.npv_p90)}`} math="npv" />
         <Stat label="Evidence strength" value={pct(r.evidence.strength)} sub="Share of the inputs backed by sources or measurements" math="evidence" />
       </div>
+      <div className="grid g2"><ValidationCard r={r} /><div className="card"><h2>Market size check</h2><MarketSizing r={r} /></div></div>
+      <IdeaCard r={r} />
       {dec.code === 'pivot' || (dec.code === 'test' && dec.best) ? (
         <div className="card"><h2>The launch plan that works best</h2>
           <p><b>{dec.best.name}.</b> Payback chance {pct(f.p_payback)} → <b>{pct(dec.best.p_payback)}</b>; chance of exceeding budget {pct(f.p_ruin)} → <b>{pct(dec.best.p_ruin)}</b>; expected value {aed(f.npv_mean)} → <b>{aed(dec.best.npv_mean)}</b>.</p>
@@ -160,6 +165,7 @@ function Funnel({ d, go }: { d: any; go: (t: string) => void }) {
       <StageCard n={1} q="What does the market look like?" family="Descriptive statistics" algo="Blinded synthetic UAE population (20,000 people)" check={['info', 'Synthetic', 'Built from category priors, never from your idea.']} passes="Category buyers, spend, pain" math="describe">
         <div className="grid g4"><Stat label="Category buyers in focus" value={num(S.describe.category_buyers)} /><Stat label="Median spend today" value={aed(S.describe.spend_median)} sub={`${aed(S.describe.spend_p25)} to ${aed(S.describe.spend_p75)}`} /><Stat label="High pain with today's options" value={pct(S.describe.pain_high_share)} /><Stat label="Category spend per year" value={aed(S.describe.tam_aed)} /></div>
         <p className="small muted" style={{ marginTop: 10 }}>{S.describe.note}</p>
+        <MarketSizing r={r} />
       </StageCard>
 
       <StageCard n={2} q="Who is similar?" family="Clustering" algo={`Gaussian mixture, ${S.segment.k} groups chosen by BIC`} check={['good', 'Pass', 'Clustering needs no labels.']} passes="Segment as a feature; beachhead segment" math="segment">
@@ -280,19 +286,28 @@ function Experiments({ d, setD }: { d: any; setD: (x: any) => void }) {
     const body = build(g); if (Object.values(body).some(v => typeof v === 'number' && !isFinite(v as number))) return setErr('Fill in every number.');
     try { const before = r.stages.forecast.p_payback; const x = await api.addExperiment(d.id, { kind, ...body }); setD(x); e.target.reset(); setMsg(`Added. Payback chance ${pct(before)} → ${pct(x.result.stages.forecast.p_payback)}.`); } catch (x: any) { setErr(x.message); }
   };
+  const submitJson = async (e: any, body: any) => {
+    setErr(''); setMsg('');
+    try { const before = r.stages.forecast.p_payback; const x = await api.addExperiment(d.id, body); setD(x); e.target.reset(); setMsg(`Added. Payback chance ${pct(before)} → ${pct(x.result.stages.forecast.p_payback)}.`); } catch (x: any) { setErr(x.message); }
+  };
   const F = ({ n, l, def }: any) => <div className="field"><label htmlFor={n}>{l}</label><input id={n} name={n} type="number" min={0} step="any" defaultValue={def} /></div>;
-  const desc = (e: any) => e.kind === 'landing' ? `Landing page: ${e.signups} sign-ups from ${e.visitors} visitors, AED ${e.spend}` : e.kind === 'pricing' ? `Pricing: ${e.points.map((p: any) => `${p.k}/${p.n} at AED ${p.price}`).join('; ')}` : e.kind === 'interviews' ? `Interviews: ${e.k} of ${e.n} with strong pain` : e.kind === 'pilot' ? `Pilot: ${e.lost} lost from ${e.customers} customers over ${e.months} months` : `A/B ${e.name || ''}: ${e.kA}/${e.nA} vs ${e.kB}/${e.nB}`;
+  const desc = (e: any) => e.kind === 'vanwestendorp' ? `Van Westendorp survey: ${e.rows.length} answers` : e.kind === 'usability' ? `Usability test: ${e.users} users, ${e.tasks_done}/${e.tasks_total} tasks${e.sus?.length ? `, ${e.sus.length} SUS scores` : ''}` : e.kind === 'sales' ? `Sales: ${e.sales.length} months` : e.kind === 'landing' ? `Landing page: ${e.signups} sign-ups from ${e.visitors} visitors, AED ${e.spend}` : e.kind === 'pricing' ? `Pricing: ${e.points.map((p: any) => `${p.k}/${p.n} at AED ${p.price}`).join('; ')}` : e.kind === 'interviews' ? `Interviews: ${e.k} of ${e.n} with strong pain` : e.kind === 'pilot' ? `Pilot: ${e.lost} lost from ${e.customers} customers over ${e.months} months` : `A/B ${e.name || ''}: ${e.kA}/${e.nA} vs ${e.kB}/${e.nB}`;
   return (
     <div className="stack">
       <div><h1>Experiments: replace guesses with evidence</h1><p className="lead">Run a cheap real test, enter what happened, and the funnel recalibrates with Bayesian updating. Measured numbers always outweigh AI estimates, priors and simulated data.</p></div>
       {err && <p className="error" role="alert">{err}</p>}{msg && <p className="callout" role="status">{msg}</p>}
+      <Kit r={r} />
       <div className="grid g3" style={{ alignItems: 'start' }}>
         <form className="card" onSubmit={e => submit(e, 'landing', g => ({ visitors: g('visitors'), signups: g('signups'), spend: g('spend'), pay_rate: g('pay_rate') }))}><h2>Landing-page test</h2><p className="small muted">Calibrates who buys (stage 4) and measures the cost to win a customer. Aim for {num(r.stages.experiments.sample_size_landing)} visitors.</p><F n="visitors" l="Visitors" /><F n="signups" l="Sign-ups" /><F n="spend" l="Ad spend (AED)" /><F n="pay_rate" l="Sign-ups expected to pay (%)" def={30} /><button className="primary">Add result</button></form>
         <form className="card" onSubmit={e => submit(e, 'pricing', g => ({ points: [[g('p1'), g('n1'), g('k1')], [g('p2'), g('n2'), g('k2')]].filter(x => isFinite(x[0]) && isFinite(x[1]) && isFinite(x[2])).map(([price, n, k]) => ({ price, n, k })) }))}><h2>Pricing test</h2><p className="small muted">Ask people at one or two prices. Two prices let the model fit price sensitivity (stage 5).</p><div className="grid g3" style={{ gap: '0 8px' }}><F n="p1" l="Price A (AED)" def={Math.round(r.assumptions.price.likely)} /><F n="n1" l="Asked" /><F n="k1" l="Accepted" /><F n="p2" l="Price B (AED)" /><F n="n2" l="Asked" /><F n="k2" l="Accepted" /></div><button className="primary">Add result</button></form>
         <form className="card" onSubmit={e => submit(e, 'interviews', g => ({ n: g('n'), k: g('k') }))}><h2>Customer interviews</h2><p className="small muted">How many describe the problem as a strong, frequent pain? Updates stage 4.</p><F n="n" l="People interviewed" /><F n="k" l="Described strong pain" /><button className="primary">Add result</button></form>
-        <form className="card" onSubmit={e => submit(e, 'pilot', g => ({ customers: g('customers'), months: g('months'), lost: g('lost') }))}><h2>Pilot</h2><p className="small muted">Serve real paying customers for a few months. Measures churn (stage 6).</p><F n="customers" l="Paying customers" /><F n="months" l="Months" /><F n="lost" l="Customers who left" /><button className="primary">Add result</button></form>
+        <form className="card" onSubmit={e => submit(e, 'pilot', g => { const b: any = { customers: g('customers'), months: g('months'), lost: g('lost') }; if (isFinite(g('prom'))) Object.assign(b, { promoters: g('prom'), passives: isFinite(g('pas')) ? g('pas') : 0, detractors: isFinite(g('det')) ? g('det') : 0 }); return b; })}><h2>Pilot (+ NPS)</h2><p className="small muted">Serve real paying customers for a few months. Measures churn (stage 6); NPS answers set satisfaction.</p><F n="customers" l="Paying customers" /><F n="months" l="Months" /><F n="lost" l="Customers who left" /><div className="grid g3" style={{ gap: '0 8px' }}><F n="prom" l="Promoters (9–10)" /><F n="pas" l="Passives (7–8)" /><F n="det" l="Detractors (0–6)" /></div><button className="primary">Add result</button></form>
+        <form className="card" onSubmit={e => { e.preventDefault(); const fd = new FormData(e.target as any); const rows = String(fd.get('vw') || '').split(/\n+/).map(l => l.split(/[,;\s]+/).filter(Boolean).map(Number)).filter(x => x.length === 4); submitJson(e, { kind: 'vanwestendorp', rows }); }}><h2>Van Westendorp pricing survey</h2><p className="small muted">One respondent per line: too cheap, cheap, expensive, too expensive (AED a month). At least 5 lines.</p><textarea name="vw" placeholder={'60, 100, 160, 220\n80, 120, 180, 250'} /><button className="primary" style={{ marginTop: 10 }}>Add result</button></form>
+        <form className="card" onSubmit={e => { e.preventDefault(); const fd = new FormData(e.target as any); const sus = String(fd.get('sus') || '').split(/[,;\s]+/).filter(Boolean).map(Number); submitJson(e, { kind: 'usability', users: +String(fd.get('users')), tasks_done: +String(fd.get('td')), tasks_total: +String(fd.get('tt')), sus }); }}><h2>Usability test</h2><p className="small muted">Watch 5 users try the sign-up or ordering journey. Replaces the AI's ease-of-use review.</p><F n="users" l="Users tested" def={5} /><div className="grid g2" style={{ gap: '0 8px' }}><F n="td" l="Tasks completed" /><F n="tt" l="Tasks attempted" /></div><div className="field"><label htmlFor="sus">SUS scores (0–100, comma-separated)</label><input id="sus" name="sus" placeholder="72.5, 80, 65" /></div><SusHelper /><button className="primary" style={{ marginTop: 10 }}>Add result</button></form>
+        <form className="card" onSubmit={e => { e.preventDefault(); const fd = new FormData(e.target as any); const sales = String(fd.get('sales') || '').split(/[,;\s]+/).filter(Boolean).map(Number); submitJson(e, { kind: 'sales', sales }); }}><h2>Real monthly sales</h2><p className="small muted">Once you are selling: monthly revenue in AED, oldest first (at least 4 months). Forecasts the next 12 months.</p><textarea name="sales" placeholder="12000, 15000, 17500, 21000" /><button className="primary" style={{ marginTop: 10 }}>Add result</button></form>
         <form className="card" onSubmit={e => submit(e, 'ab', g => ({ name: 'A/B test', nA: g('nA'), kA: g('kA'), nB: g('nB'), kB: g('kB') }))}><h2>A/B test</h2><p className="small muted">Compare two versions (offer, page, price). Reports the chance B beats A.</p><div className="grid g2" style={{ gap: '0 8px' }}><F n="nA" l="A: visitors" /><F n="kA" l="A: conversions" /><F n="nB" l="B: visitors" /><F n="kB" l="B: conversions" /></div><button className="primary">Add result</button></form>
       </div>
+      <ExtraResults r={r} />
       <div className="card"><h2>Results so far</h2>
         {d.experiments.length ? <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>{d.experiments.map((e: any, i: number) => <li key={i} className="row between" style={{ borderBottom: '1px solid var(--line)', padding: '8px 0' }}><span><Badge tone="good">Measured</Badge> {desc(e)}</span><button onClick={async () => setD(await api.removeExperiment(d.id, i))}>Remove</button></li>)}</ul> : <p className="muted">No results yet: every number is still an estimate.</p>}
         {ev.conversion && <p className="small" style={{ marginTop: 10 }}>Conversion belief Beta({ev.conversion.a}, {ev.conversion.b}): mean {pct(ev.conversion.mean, 2)}. Cost to win a customer now {aed(r.assumptions.cac.min)} to {aed(r.assumptions.cac.max)}.</p>}
@@ -353,6 +368,7 @@ function Sources({ d, setD }: { d: any; setD: (x: any) => void }) {
         {err && <p className="error">{err}</p>}{msg && <p className="small" role="status">{msg}</p>}
         <div className="row" style={{ marginTop: 10 }}><button className="primary" onClick={save}>Recalculate</button><button onClick={async () => { setD(await api.reset(d.id)); setMsg('All edits undone.'); }}>Undo all edits</button></div>
       </div>
+      {r.consistency?.length ? <div className="card"><h2>Self-consistency check</h2><p className="small muted">A second AI estimated the same costs without seeing the first answer. Big disagreements widen the range used in the simulation.</p><table><thead><tr><th>Input</th><th className="num">Estimate 1</th><th className="num">Estimate 2</th><th className="num">Gap</th><th></th></tr></thead><tbody>{r.consistency.map((c: any) => <tr key={c.key}><td>{c.name}</td><td className="num">{num(c.first, c.first < 100 ? 1 : 0)}</td><td className="num">{num(c.second, c.second < 100 ? 1 : 0)}</td><td className="num">{c.ratio.toFixed(2)}×</td><td>{c.widened ? <Badge tone="warn">Range widened</Badge> : <Badge tone="good">Consistent</Badge>}</td></tr>)}</tbody></table></div> : null}
       {!Object.keys(ag).length && <div className="callout warn">This analysis ran without AI agents, so every input is a category prior. Add an Anthropic API key on the server to get web research with sources.</div>}
       {ag.regulation && <div className="card"><h2>Licence and approvals</h2><p><b>{ag.regulation.licence_type || 'Licence type not identified'}</b>{ag.regulation.authority && <> from {ag.regulation.authority}</>}. <Source url={ag.regulation.url} /></p>
         {ag.regulation.hard_blockers?.length ? <p className="error">Blockers: {ag.regulation.hard_blockers.join('; ')}</p> : null}

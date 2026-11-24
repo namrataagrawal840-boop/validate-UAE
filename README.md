@@ -21,6 +21,17 @@ ValidateUAE turns one decision, **launch, launch with changes, test first, or st
 | 9 | Does our action change it? | Bayesian Beta-binomial tests, power analysis, price-elasticity fit | Calibration for stages 4 to 6 |
 | 10 | What is the best allocation? | Linear programming (channels); 12 launch plans under the founder's limits | One recommended plan |
 
+Around the funnel, the full business validation:
+- **Validation score**: a weighted multi-criteria score (market, customers, competition, money, ease of use) with a confidence range that widens when evidence is thin
+- **Idea at a glance**: a neutral brief, a Lean Canvas, the key assumptions and an AI judge rubric (problem severity, solution fit, differentiation, UAE feasibility, timing)
+- **Market size check**: TAM, SAM and SOM, top-down (AI research) against bottom-up (agent simulation), flagged when they differ by more than 3×
+- **Customer value**: jobs to be done, a Value Proposition Canvas, Kano features, the value gap, willingness to pay against your price, and ease of use (journey, Nielsen heuristics, SUS)
+- **Improve my idea**: concrete changes (price, lean launch, beachhead segment, onboarding, membership, partners, and the critic's pivot ideas). Each is re-simulated and ranked, the best are recombined (one genetic-algorithm generation), and any change can be applied to the plan.
+- **Real-world tests**: landing page, pricing at two prices, Van Westendorp survey, interviews, a pilot with NPS, A/B tests, a usability test with SUS, and real monthly sales with a Holt forecast. Every result updates the model.
+- **Experiment kit**: landing page text, two ads for an A/B test, an interview script and survey questions
+- **Self-consistency**: a second independent AI estimate of costs; ranges are widened when the two disagree
+- **Copy summary** and **Save as PDF**
+
 The decision then combines the stages: a plan passes when P(payback) ≥ the founder's minimum, P(cash need > budget) ≤ the founder's limit, and expected NPV > 0. Weak evidence turns any "launch" into "test first". Hard limits (licence blockers, capacity below break-even) override everything. A variance-based sensitivity analysis shows where the funnel leaks, kill criteria say when to stop, and an audit re-runs the analysis without the founder's claims, against an average business and under heavy shocks.
 
 See [docs/METHODOLOGY.md](docs/METHODOLOGY.md) for every formula and design choice.
@@ -83,12 +94,13 @@ Or build everything into one container: `docker build -t validate-uae . && docke
 cd backend && python -m pytest -q
 ```
 
-34 tests cover the following:
+44 tests cover the following:
 - the synthetic market's independence from the idea, and its match to the population shares
 - the agent simulation (capacity, word of mouth, unhappy customers leaving, competitor reaction, repeatability, customer stories)
 - the aggregate cash model (repeatability, a hand-calculated break-even, shocks adding risk)
 - Kaplan-Meier, the Isolation Forest, the BIC choice, the choice-model calibration, the linear programme, price elasticity, A/B tests and TF-IDF
 - Bayesian updates from experiments, the budget hard limit
+- Van Westendorp, SUS, NPS, the Holt forecast, the validation score, the variant ranking, recombination and apply, and self-consistency
 - dropping URLs the AI did not actually find
 - the full API flow
 
@@ -98,7 +110,8 @@ cd backend && python -m pytest -q
 backend/app/
   priors.py          category priors for the UAE (illustrative, replace with official data)
   synth.py           blinded synthetic market + comparable plans
-  funnel/            the ten stages: market_stages, checks, abm (agent-based simulation), simulate (helpers), decide
+  funnel/            the ten stages: market_stages, checks, abm (agent-based simulation), simulate (helpers), decide,
+                     validation (score, sizing, value, variants, Van Westendorp, SUS, NPS, Holt, experiment kit)
   compute.py         runs the funnel and the audit; deterministic
   agents.py          Claude agents with web search, cleaning and URL checks
   main.py            FastAPI: jobs, experiments, what-if, outcomes, calibration

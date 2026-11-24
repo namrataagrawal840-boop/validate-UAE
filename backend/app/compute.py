@@ -10,6 +10,7 @@ from .funnel import checks as C
 from .funnel.simulate import summary
 from .funnel.abm import simulate_abm, friend_network
 from .funnel import decide as D
+from .funnel import validation as V
 
 CREDIT = {"measured": 1.0, "benchmarked": .6, "web": .6, "founder": .3, "ai": .2, "critic": .2, "derived": .15, "prior": .1}
 LABEL = {"measured": "Measured", "benchmarked": "Benchmarked (your source)", "web": "Benchmarked (web source)", "founder": "Founder input",
@@ -38,6 +39,16 @@ def build_assumptions(state):
             warnings.append(f"{P.NAMES[k]}: the finance agent's value {mid:,.4g} is far outside the normal range for this business type, so it was clipped.")
             mid = float(np.clip(mid, plo, phi)); lo = min(lo, mid); hi = max(hi, mid)
         A[k] = dict(min=lo, likely=mid, max=hi, label="web" if v.get("url") else "ai", source=v.get("source") or "Finance agent", url=v.get("url"))
+    # Self-consistency: a second, independent AI estimate. If the two disagree a lot, the range is widened.
+    cons = (ag.get("consistency") or {}).get("fields", {}); consistency = []
+    for k, v in cons.items():
+        if k not in A or A[k]["label"] not in ("ai", "web") or not v: continue
+        r = max(v["likely"], A[k]["likely"]) / max(min(v["likely"], A[k]["likely"]), 1e-9)
+        consistency.append(dict(key=k, name=P.NAMES[k], first=A[k]["likely"], second=v["likely"], ratio=float(r), widened=bool(r > 1.5)))
+        if r > 1.5:
+            A[k]["min"] = min(A[k]["min"], v["min"]); A[k]["max"] = max(A[k]["max"], v["max"])
+            warnings.append(f"{P.NAMES[k]}: two independent AI estimates differ by {r:.1f}×, so the range was widened.")
+    state["_consistency"] = consistency
     for k, key in (("price", "price"), ("fixed", "fixed"), ("setup", "setup_budget")):
         val = it.get(key)
         if val and float(val) > 0:
@@ -50,12 +61,14 @@ def build_assumptions(state):
         A["cac"]["label"] = "critic"; A["cac"]["source"] += f"; raised {up - 1:.0%} by the critic"
     for k, o in (state.get("overrides") or {}).items():
         if k in A: A[k] = {**A[k], **o}
+    for v in state.get("applied") or []:
+        V.apply_changes_A(A, v["changes"])
     return A, warnings
 
 
 def apply_experiments(state, A, coefs, m, it, price, comp_pos, prior_pain_share):
     ex = state.get("experiments") or []
-    notes, evid = [], dict(conversion=None, pain=None, acceptance=None, churn=None, elasticity=None, ab=[])
+    notes, evid = [], dict(conversion=None, pain=None, acceptance=None, churn=None, elasticity=None, ab=[], vw=None, usability=None, nps=None, sales=None)
     landing = [e for e in ex if e["kind"] == "landing"]
     pricing_pts = [(p["price"], p["n"], p["k"]) for e in ex if e["kind"] == "pricing" for p in e["points"]]
     if landing:
@@ -80,6 +93,16 @@ def apply_experiments(state, A, coefs, m, it, price, comp_pos, prior_pain_share)
             lo, mid, hi = np.quantile(qs, [.1, .5, .9]) * 100
             A["churn"] = dict(min=lo, likely=mid, max=hi, label="measured", source=f"Pilot: {e['lost']} of {e['customers']} customers left over {e['months']} months")
             evid["churn"] = dict(rate=mid)
+        if e["kind"] == "pilot" and e.get("promoters") is not None:
+            evid["nps"] = V.nps(e["promoters"], e.get("passives", 0), e.get("detractors", 0))
+        if e["kind"] == "vanwestendorp":
+            vw = V.van_westendorp(e["rows"]); k, n = V.accept_at(e["rows"], A["price"]["likely"]); vw.update(accept_k=k, accept_n=n); evid["vw"] = vw
+            pricing_pts.append((A["price"]["likely"], n, k))
+            n_all = sum(x[1] for x in pricing_pts); k_all = sum(x[2] for x in pricing_pts); evid["acceptance"] = dict(n=n_all, k=k_all, mean=(1 + k_all) / (2 + n_all))
+        if e["kind"] == "usability":
+            evid["usability"] = V.usability_test(e["users"], e["tasks_done"], e["tasks_total"], e.get("sus") or [])
+        if e["kind"] == "sales":
+            evid["sales"] = V.holt_forecast(e["sales"])
         if e["kind"] == "ab":
             evid["ab"].append(dict(name=e.get("name", "A/B test"), label_a=e.get("label_a", "A"), label_b=e.get("label_b", "B"), **C.ab_compare(e["nA"], e["kA"], e["nB"], e["kB"])))
     target = evid["conversion"]["mean"] if evid["conversion"] else (evid["acceptance"]["mean"] * .5 if evid["acceptance"] else None)
@@ -130,8 +153,9 @@ def compute(state, light=False):
     pain_adopt = float(np.average(m["pain"][adopters], weights=w)) if w.sum() > 0 else .5
     value_ratio = float(np.exp(np.average(np.log(MS.wtp(m)[adopters] / price), weights=w))) if w.sum() > 0 else 1
     us, steps, sev = usability_score(ag)
+    if evid["usability"]: us = evid["usability"]["score"]
     sat_model = float(np.clip(.35 + .25 * (pain_adopt - .5) * 2 + .2 * np.tanh(np.log(value_ratio)) + .2 * (((us if us is not None else 60) - 50) / 50), .1, .95))
-    sat = float(st["satisfaction"]) if st.get("satisfaction") is not None else sat_model
+    sat = float(st["satisfaction"]) if st.get("satisfaction") is not None else evid["nps"]["satisfaction"] if evid["nps"] else sat_model
     haircut = float(np.clip((ag.get("critic") or {}).get("market_haircut", 1) or 1, .4, 1))
     market_label = "measured" if evid["conversion"] else "derived"
     pot_used = pot["potential"] * haircut
@@ -144,6 +168,8 @@ def compute(state, light=False):
     alo, ahi = ((.9, 1.1) if evid["acceptance"] else (.75, 1.15))
     inp = dict(market=(pot_used * mlo, pot_used, pot_used * mhi), arpu=(spend["expected_arpu"] * alo, spend["expected_arpu"], spend["expected_arpu"] * ahi),
                satisfaction=(max(.05, sat - .15), sat, min(.97, sat + .12)), **{k: tri(A[k]) for k in ["var_pct", "fixed", "setup", "cac", "churn", "capacity", "p", "q"]})
+    for v in state.get("applied") or []:
+        inp = V.change_inp(inp, {k: x for k, x in v["changes"].items() if k in ("market", "satisfaction")})
     sim_kw = dict(seed=seed, horizon=horizon, shocks=st["shocks"], cycles=st["cycles"], seasonality=st["seasonality"], season=t["season"], budget=limits["budget"], open_months=t["open_months"])
     pop = agent_population(m, it, p_adopt, spend["arpu_i"], seg, pot, spend["expected_arpu"], A["capacity"]["likely"], seed)
     run = lambda i, **kw: simulate_abm(i, pop, **{**sim_kw, **kw})
@@ -189,6 +215,17 @@ def compute(state, light=False):
               usability=us, evidence=strength * 100)
     result["scores"] = sc
     result["evidence"] = evidence
+    result["validation"] = V.validation_score(sc, strength, len((ag.get("critic") or {}).get("weak_claims") or []), S["p_payback"])
+    result["market_sizing"] = V.market_sizing(desc, pot, spend["expected_arpu"], S["customers_end_p50"], ag.get("market"))
+    fidx = np.where(p_adopt > 0)[0][:6000]
+    result["value"] = V.customer_value(ag, value_ratio, pain_adopt, price, MS.wtp(m)[fidx])
+    result["value"]["usability"] = dict(score=us, steps=steps, severity=sev, measured=evid["usability"], journey=(ag.get("usability") or {}).get("flow_steps", []),
+                                        issues=(ag.get("usability") or {}).get("issues", []), suggestions=(ag.get("usability") or {}).get("suggestions", []))
+    result["consistency"] = state.get("_consistency", [])
+    orch = ag.get("orch") or {}
+    result["idea"] = dict(brief=orch.get("neutral_brief") or it["idea"], canvas=orch.get("lean_canvas") or default_canvas(it, A),
+                          canvas_source="ai" if orch.get("lean_canvas") else "template", assumptions=orch.get("key_assumptions") or DEFAULT_ASSUMPTIONS,
+                          rubric=(ag.get("critic") or {}).get("rubric") or [], applied=state.get("applied") or [])
     result["competition"] = dict(force_avg=fa, differentiation=diff)
     if light:
         return result
@@ -203,6 +240,9 @@ def compute(state, light=False):
     pool_ex = cf.ThreadPoolExecutor(max_workers=2)  # launch plans and the stop-rule search run side by side
     fut_opts = pool_ex.submit(D.launch_options, inp, run, mm, segs[0]["id"] if segs else None)
     fut_kill = pool_ex.submit(D.kill_threshold, inp, run, limits, rate)
+    applied_ids = {v["id"] for v in state.get("applied") or []}
+    pm_market = lambda f: float(MS.adoption(m, it, price * f, comp_pos, coefs).sum() / max(p_adopt.sum(), 1e-9))
+    fut_var = pool_ex.submit(V.rank_variants, [v for v in V.all_variants(ag) if v["id"] not in applied_ids], inp, run, pm_market)
     opts = fut_opts.result()
     first_year_new = float(np.median(sim["paths"]["customers"][:, min(11, horizon - 1)]))
     budget_month = float(it.get("marketing_budget_aed") or max(2000, A["cac"]["likely"] * max(first_year_new / 12 * 1.5, 20)))
@@ -216,8 +256,9 @@ def compute(state, light=False):
 
     # Step 6: leaks and kill criteria
     lk = D.leak(sim)
-    kill = fut_kill.result(); pool_ex.shutdown()
+    kill = fut_kill.result(); result["improve"] = fut_var.result(); pool_ex.shutdown()
     result["leak"] = lk; result["kill"] = kill
+    result["kit"] = V.experiment_kit(it, ag, price, stages["experiments"]["sample_size_landing"], rate)
 
     # Step 7: audit
     null_state = dict(intake={**it, "price": None, "fixed": None, "setup_budget": None}, agents={}, settings=st)
@@ -255,6 +296,18 @@ def agent_population(m, it, p_adopt, arpu_i, seg, pot, arpu_base, capacity, seed
     desc = [f"{inc[m['income_band'][i]]}-income, age {int(m['age'][i])}, {em[m['emirate'][i]]}, {'mostly online' if m['digital'][i] > .6 else 'mostly in person' if m['digital'][i] < .4 else 'online and in person'}" for i in pick]
     return dict(p_buy=p_adopt[pick], arpu=arpu_i[pick], seg=labels, wtp=MS.wtp(m)[pick], desc=desc, scale=pool / n,
                 nbrs=friend_network(n, order, seed), market_base=pot["potential"], arpu_base=arpu_base)
+
+
+DEFAULT_ASSUMPTIONS = ["Customers feel the problem strongly enough to switch", "Enough of them accept the planned price",
+                       "Customers can be won at the planned cost", "Customers keep buying month after month", "Costs stay within the plan"]
+
+
+def default_canvas(it, A):
+    t = P.TYPES[it["business_type"]]
+    return dict(problem="To be confirmed with customer interviews", customer_segments=it.get("target_customer") or f"Category buyers in {it.get('emirate')}",
+                unique_value="To be defined", solution=it["idea"][:200], channels=", ".join(c[0] for c in t["channels"][:3]),
+                revenue_streams=f"About AED {A['price']['likely']:,.0f} per customer per month", cost_structure=f"About AED {A['fixed']['likely']:,.0f} fixed a month; setup AED {A['setup']['likely']:,.0f}",
+                key_metrics="New customers a month, churn, cost to win a customer, payback", unfair_advantage="Not identified yet")
 
 
 def kill_criteria(r, limits):

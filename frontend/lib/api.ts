@@ -20,4 +20,7 @@ export const api = {
   reset: (id: string) => req(`/api/analyses/${id}/reset`, { method: 'POST' }),
   outcome: (id: string, o: any) => req(`/api/analyses/${id}/outcome`, { method: 'POST', body: JSON.stringify(o) }),
   calibration: () => req('/api/calibration'),
+  applyVariant: (id: string, variant_id: string) => req(`/api/analyses/${id}/variants`, { method: 'POST', body: JSON.stringify({ variant_id }) }),
+  removeVariant: (id: string, vid: string) => req(`/api/analyses/${id}/variants/${encodeURIComponent(vid)}`, { method: 'DELETE' }),
+  susQuestions: () => req('/api/sus-questions'),
 };
