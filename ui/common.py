@@ -207,7 +207,7 @@ def recompute(mutate, message):
     refresh(message, state)
 
 
-RESULT_VERSION = 3
+RESULT_VERSION = 4
 
 
 # ---------------- experiments always come with a ledger record ----------------

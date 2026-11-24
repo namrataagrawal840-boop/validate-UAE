@@ -187,7 +187,7 @@ def tab_value(r, state):
     c1, c2 = st.columns(2)
     with c1:
         with st.container(border=True):
-            st.subheader("Willingness to pay vs your price")
+            st.subheader("Willingness to pay vs your price"); st.caption("Simulated buyers from the synthetic population, not real customers.")
             mids = [(h["edges"][i] + h["edges"][i + 1]) / 2 for i in range(len(h["counts"]))]
             fig = go.Figure(go.Bar(x=mids, y=h["counts"], marker=dict(color=["#aab3f2" if m >= h["price"] else "#e4e7fb" for m in mids])))
             fig.add_vline(x=h["price"], line=dict(color=ZERO, dash="dash")); fig.update_layout(**{**PLOT, "height": 260}, yaxis=dict(visible=False), xaxis_title="AED per month")
@@ -218,7 +218,7 @@ def tab_value(r, state):
             if u.get("measured"): st.markdown(f"Measured: {u['measured']['users']} users, {pct(u['measured']['success'])} task success" + (f", SUS {u['measured']['sus']:.1f} ({u['measured']['sus_grade']})" if u['measured']['sus'] is not None else ""))
             if u.get("journey"): st.markdown("\n".join(f"{n + 1}. **{s['step']}** {s.get('note') or ''}" for n, s in enumerate(u["journey"])))
             for x in u.get("issues") or []: st.markdown(f"{pill(['', 'Minor', 'Major', 'Critical'][x['severity']], 'bad' if x['severity'] >= 3 else 'warn' if x['severity'] == 2 else '')} {x['issue']} ({x['heuristic']})", unsafe_allow_html=True)
-            if not u.get("journey") and not u.get("measured"): st.caption("Run with AI agents, or enter a usability test on the Experiments tab.")
+            if not u.get("journey") and not u.get("measured"): st.caption("Run with AI agents, or record a usability test in the Validation lab.")
 
 
 def tab_competition(r, state):

@@ -2,7 +2,7 @@
 import streamlit as st
 
 from app import store
-from ui import report, evidence
+from ui import report, evidence, finance, insights
 from ui.common import ss, user_id
 
 
@@ -19,7 +19,8 @@ def header():
 SECTIONS = {
     "Decision": report.tab_decision,
     "Evidence ledger": evidence.page,
-    "Market and customers": report.tab_value,
+    "Financials": finance.page,
+    "Market and customers": insights.page,
     "Competition": report.tab_competition,
     "Experiments": report.tab_experiments,
     "Improve my idea": report.tab_improve,

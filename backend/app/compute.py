@@ -13,6 +13,7 @@ from .funnel import decide as D
 from .funnel import validation as V
 from .funnel import competition as CP
 from . import evidence as EVD
+from .funnel import finance as FIN
 
 CREDIT = EVD.LABEL_CREDIT  # kept for compatibility
 LABEL = {"measured": "Measured", "benchmarked": "Benchmarked (your source)", "web": "Benchmarked (web source)", "founder": "Founder input",
@@ -290,6 +291,7 @@ def compute(state, light=False):
         concentration=dict(top_segment=segs[0]["name"] if segs else None, top_share=segs[0]["value_share"] if segs else None),
         optimism_flags=anom["optimistic_count"], neutral_brief=bool((ag.get("orch") or {}).get("neutral_brief")))
     result["evidence"]["gaps"] = EVD.gaps(areas, lk["rows"])
+    result["finance"] = FIN.analyse(sim, S, unit, A, limits["budget"], t["open_months"], horizon)
     result["kill_criteria"] = kill_criteria(result, limits)
     result["next_steps"] = next_steps(result)
     return result
