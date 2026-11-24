@@ -125,3 +125,4 @@ docs/METHODOLOGY.md  formulas and design choices
 - Population shares, category ranges and the UAE population scale are illustrative priors.
 - AI agents can be wrong. Every number shows its label (prior, AI estimate, web source, founder, measured), and URLs the model did not actually retrieve are removed.
 - Forecast calibration can only be measured after real outcomes are recorded (Audit → Monitoring).
+Maintained By Namrata Agrawal
