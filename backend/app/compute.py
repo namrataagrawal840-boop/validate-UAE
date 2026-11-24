@@ -11,6 +11,7 @@ from .funnel.simulate import summary
 from .funnel.abm import simulate_abm, friend_network
 from .funnel import decide as D
 from .funnel import validation as V
+from .funnel import competition as CP
 
 CREDIT = {"measured": 1.0, "benchmarked": .6, "web": .6, "founder": .3, "ai": .2, "critic": .2, "derived": .15, "prior": .1}
 LABEL = {"measured": "Measured", "benchmarked": "Benchmarked (your source)", "web": "Benchmarked (web source)", "founder": "Founder input",
@@ -112,11 +113,11 @@ def apply_experiments(state, A, coefs, m, it, price, comp_pos, prior_pain_share)
     return evid, notes
 
 
-def comp_position(ag):
-    c = ag.get("competition") or {}
+def comp_position(c):
     f = c.get("forces") or {}
     fa = np.mean([float(np.clip(f.get(k, 3.5), 1, 5)) for k in ["rivalry", "new_entrants", "substitutes", "buyer_power", "supplier_power"]]) if f else 3.5
-    diff = float(np.clip(c.get("differentiation", 40), 0, 100))
+    d = c.get("differentiation")
+    diff = float(np.clip(40 if d is None else d, 0, 100))
     return float(np.clip(-(fa - 3) / 2 * .6 + (diff - 50) / 50 * .4, -1, 1)), float(fa), diff
 
 
@@ -135,7 +136,10 @@ def compute(state, light=False):
                   max_ruin=float(it.get("max_ruin_probability") or .2))
     m = market(seed, bt)
     A, warnings = build_assumptions(state)
-    comp_pos, fa, diff = comp_position(ag)
+    agc = ag.get("competition") or {}
+    comp = CP.analyse(state, bt, f"{(ag.get('orch') or {}).get('neutral_brief') or it['idea']} {it.get('target_customer') or ''}", A["price"]["likely"], t["price"][1],
+                      ai_forces=agc.get("forces"), ai_diff=agc.get("differentiation"), your_features=state.get("your_features"))
+    comp_pos, fa, diff = comp_position(comp)
     coefs = dict(P.CHOICE_MODEL)
     price = A["price"]["likely"]
     desc = MS.describe(m, it)
@@ -167,7 +171,7 @@ def compute(state, light=False):
     mlo, mhi = ((.7, 1.3) if evid["conversion"] else (.55, 1.4) if evid["acceptance"] else (.35, 1.6))
     alo, ahi = ((.9, 1.1) if evid["acceptance"] else (.75, 1.15))
     inp = dict(market=(pot_used * mlo, pot_used, pot_used * mhi), arpu=(spend["expected_arpu"] * alo, spend["expected_arpu"], spend["expected_arpu"] * ahi),
-               satisfaction=(max(.05, sat - .15), sat, min(.97, sat + .12)), **{k: tri(A[k]) for k in ["var_pct", "fixed", "setup", "cac", "churn", "capacity", "p", "q"]})
+               satisfaction=(max(.05, sat - .15), sat, min(.97, sat + .12)), **{k: tri(A[k]) for k in ["var_pct", "fixed", "setup", "cac", "churn", "capacity", "p", "q"]}, rivalry=float((comp["forces"] or {}).get("rivalry", 3.0)))
     for v in state.get("applied") or []:
         inp = V.change_inp(inp, {k: x for k, x in v["changes"].items() if k in ("market", "satisfaction")})
     sim_kw = dict(seed=seed, horizon=horizon, shocks=st["shocks"], cycles=st["cycles"], seasonality=st["seasonality"], season=t["season"], budget=limits["budget"], open_months=t["open_months"])
@@ -226,7 +230,7 @@ def compute(state, light=False):
     result["idea"] = dict(brief=orch.get("neutral_brief") or it["idea"], canvas=orch.get("lean_canvas") or default_canvas(it, A),
                           canvas_source="ai" if orch.get("lean_canvas") else "template", assumptions=orch.get("key_assumptions") or DEFAULT_ASSUMPTIONS,
                           rubric=(ag.get("critic") or {}).get("rubric") or [], applied=state.get("applied") or [])
-    result["competition"] = dict(force_avg=fa, differentiation=diff)
+    result["competition"] = {**comp, "force_avg": fa, "differentiation": diff, "rivalry": inp["rivalry"]}
     if light:
         return result
 

@@ -20,6 +20,7 @@ def num(v, d=0):
 def explain(r):
     S, A, f, u, L = r["stages"], r["assumptions"], r["stages"]["forecast"], r["unit"], r["limits"]
     shock = ["None", "Low", "Medium", "High"][r["settings"]["shocks"]]
+    CO = r.get("competition") or {}
 
     def a(k, fmt=lambda v: num(v, 2)):
         return (A[k]["name"], fmt(A[k]["likely"]), A[k]["label_text"])
@@ -75,5 +76,14 @@ def explain(r):
                     f"current plan: P(payback) {pct(IM['base']['p_payback'])}, E[NPV] {aed(IM['base']['npv_mean'])}", []),
         "vw": ("Van Westendorp price range", "Each respondent names four prices. Where the curves cross gives the optimal price (too cheap = too expensive), the indifference price (cheap = expensive) and the acceptable range.",
                (f"optimal {aed(EV['vw']['opp'])}, indifference {aed(EV['vw']['ipp'])}\nrange {aed(EV['vw']['pmc'])} to {aed(EV['vw']['pme'])}") if EV.get("vw") else "No survey yet.", []),
+        "competition": ("How competitors are scored", "Each competitor's description is compared with your idea using TF-IDF cosine similarity, mixed with how many of your features it also offers. "
+                        "Threat adds how close its price is to yours and how strong it is (rating). Direct rivals count fully, indirect 60%, substitutes 35%. "
+                        "Named competitors raise rivalry and lower differentiation; those shift the buying model and make the simulated competitor react more often.",
+                        "similarity = 0.7 x min(1, cosine / 0.35) + 0.3 x feature overlap\nprice closeness = exp(-|ln(their price / your price)| / 0.5)\n"
+                        "threat = type weight x (0.5 similarity + 0.3 price closeness + 0.2 rating/5) x 100\n"
+                        "rivalry = 1 + 4 x (1 - exp(-sum(threat/100) / 1.2))   (averaged with the AI's score if any)\n"
+                        "competitor reaction chance per month = 15% x rivalry / 3",
+                        [("Rivalry used", num(CO.get("rivalry"), 2), "1 weak to 5 strong"), ("Differentiation", num(CO.get("differentiation"), 0), "0-100"),
+                         ("Competition score", num(r["scores"]["competition"], 0), "0.6 x (100 - 25 x (forces avg - 1)) + 0.4 x differentiation")]),
     }
     return D

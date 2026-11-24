@@ -68,6 +68,10 @@ The site works without a key (it uses category priors), but the AI research agen
 3. Open **API keys** → **Create key**, name it `validate-uae`, and copy it. It is shown only once.
 4. Never paste the key into the code or commit it. Put it in your hosting provider's secret settings (below) or in a local `.env` file, which is git-ignored.
 
+## Competition analysis
+
+The **Competition** tab shows who already does the same or a very similar thing. Competitors come from three places: ones you type in (on the start form or the tab), real UAE businesses the competition agent finds on the web with links (needs an API key), and typical competitor types for the category when neither is available. Each competitor gets a TF-IDF similarity to your idea, a price-closeness score and a threat score (0-100). The tab also shows a positioning map (price vs similarity), a feature comparison with your edge and the table stakes you are missing, a price benchmark and the five forces. Named competitors raise rivalry and lower differentiation, which feed the buying model and make the simulated competitor react more often.
+
 ## Put it online with Streamlit (easiest, free)
 
 The file `streamlit_app.py` is a Streamlit version of the same app. It uses the same agents, funnel and agent-based simulation, with the same tabs.

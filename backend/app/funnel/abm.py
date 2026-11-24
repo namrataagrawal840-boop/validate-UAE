@@ -74,6 +74,7 @@ def simulate_abm(inp, pop, *, runs=100, seed=2027, horizon=36, shocks=2, cycles=
     cum = np.array(P.REGIMES["P"]).cumsum(1); rmult = np.array(P.REGIMES["mult"])
     r_month = (1 + P.ANNUAL_DISCOUNT_RATE) ** (1 / 12) - 1
     potential = pbuy.sum(1)
+    comp_prob = COMP_PROB * float(np.clip(float(inp.get("rivalry", 3.0)) / 3.0, .4, 1.7))  # more rivals -> faster reactions
 
     state = np.zeros((R, N), dtype=np.int8)         # 0 unaware, 1 said no, 2 customer, 3 left
     sat = np.zeros((R, N)); unhappy_until = np.full((R, N), -1, dtype=np.int16)
@@ -111,7 +112,7 @@ def simulate_abm(inp, pop, *, runs=100, seed=2027, horizon=36, shocks=2, cycles=
             if P.RAMADAN_MONTH.get(yr) == cal: dm = dm * ramadan
         # ---- competitor reaction ----
         cust = state == 2; n_cust = cust.sum(1)
-        provoked = (n_cust / np.maximum(potential, 1e-9) > COMP_SHARE) & (comp_left <= 0) & (rng.random(R) < COMP_PROB)
+        provoked = (n_cust / np.maximum(potential, 1e-9) > COMP_SHARE) & (comp_left <= 0) & (rng.random(R) < comp_prob)
         comp_left = np.where(provoked, COMP_MONTHS, comp_left); comp_count += provoked
         comp_on = comp_left > 0; comp_left = np.maximum(comp_left - 1, 0)
         dm = dm * np.where(comp_on, .8, 1.0); cm = cm * np.where(comp_on, 1.25, 1.0)

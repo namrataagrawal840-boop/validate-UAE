@@ -46,9 +46,11 @@ Return the 5 main pains (intensity 0-100, where 50 = annoying but tolerated, 80 
 {{"pains": [{{"pain": "", "intensity": 0, "url": ""}}], "evidence": [{{"quote": "", "url": ""}}], "alternatives": [{{"name": "", "monthly_cost_aed": 0, "url": ""}}], "wtp_aed": {{"min": 0, "likely": 0, "max": 0}}, "jtbd": [{{"type": "functional", "job": ""}}], "value_canvas": {{"jobs": [""], "pains": [""], "gains": [""], "pain_relievers": [""], "gain_creators": [""], "products": [""]}}, "kano": [{{"feature": "", "category": "must-have"}}]}}""",
     "competition": lambda it: f"""You are the competition agent of ValidateUAE. Search the web for real competitors operating in the UAE.
 {ctx(it)}
-List 4-8 real competitors (name, direct/indirect/substitute, price point, a short note, URL). Only name businesses you found in search results. Score Porter's five forces 1 (weak pressure) to 5 (strong). differentiation 0-100 = how clearly this idea stands apart.
+List 5-8 real businesses already doing the same or a very similar thing in the UAE (prefer the same emirate): direct = same offer to the same customers; indirect = different offer, same need; substitute = what people do instead. Only name businesses you found in search results, and give the URL where you found each.
+For each: where it operates, typical spend per customer per month in AED as a number (price_aed; null if not found) and the price as written (price_point), public rating out of 5 if you found one (else null), what it offers (note), 2-3 strengths, 2-3 weaknesses (from reviews where possible), and the features it offers as short phrases (e.g. "Online booking", "Women-only sessions").
+Score Porter's five forces 1 (weak pressure) to 5 (strong). differentiation 0-100 = how clearly this idea stands apart. gaps = needs competitors leave unmet; moats = what could protect this idea.
 {RULES}
-{{"competitors": [{{"name": "", "type": "direct", "price_point": "", "note": "", "url": ""}}], "forces": {{"rivalry": 3, "new_entrants": 3, "substitutes": 3, "buyer_power": 3, "supplier_power": 3}}, "differentiation": 0, "gaps": [""], "moats": [""]}}""",
+{{"competitors": [{{"name": "", "type": "direct", "location": "", "price_aed": null, "price_point": "", "rating": null, "note": "", "strengths": [""], "weaknesses": [""], "features": [""], "url": ""}}], "forces": {{"rivalry": 3, "new_entrants": 3, "substitutes": 3, "buyer_power": 3, "supplier_power": 3}}, "differentiation": 0, "gaps": [""], "moats": [""]}}""",
     "finance": lambda it: f"""You are the finance agent of ValidateUAE. Search the web for current UAE costs: commercial rent for the area, trade licence and visa costs, salaries, supplier or platform commissions, typical ad costs.
 {ctx(it)}
 Give low/likely/high ranges. price = average revenue per active customer per month. var_pct = % of revenue spent per sale (ingredients, stock, commissions, payment fees). fixed = monthly rent, salaries, visas, licence spread monthly, software. setup = one-off licence, fit-out, equipment, deposits. cac = cost to win one paying customer. churn = % of active customers lost per month. capacity = most active customers per month at launch size. For each field give the source name and URL you used, or leave url empty if it is your estimate.
@@ -157,7 +159,10 @@ def clean(name, v, found):
                     kano=L(v.get("kano"), lambda k: isinstance(k, dict) and s(k.get("feature")) and dict(feature=s(k.get("feature"), 160), category=k.get("category") if k.get("category") in ("must-have", "performance", "delighter", "indifferent") else "performance"), 8))
     if name == "competition":
         f = v.get("forces") or {}
-        return dict(competitors=L(v.get("competitors"), lambda c: isinstance(c, dict) and s(c.get("name")) and dict(name=s(c.get("name"), 120), type=c.get("type") if c.get("type") in ("direct", "indirect", "substitute") else "direct", price_point=s(c.get("price_point"), 80), note=s(c.get("note"), 240), url=url_ok(c.get("url"), found)), 8),
+        return dict(competitors=L(v.get("competitors"), lambda c: isinstance(c, dict) and s(c.get("name")) and dict(name=s(c.get("name"), 120), type=c.get("type") if c.get("type") in ("direct", "indirect", "substitute") else "direct", location=s(c.get("location"), 80),
+                                price_aed=num(c.get("price_aed"), 1, 1e6), price_point=s(c.get("price_point"), 80), rating=num(c.get("rating"), 0, 5), note=s(c.get("note"), 240),
+                                strengths=L(c.get("strengths"), lambda x: s(x, 120), 3), weaknesses=L(c.get("weaknesses"), lambda x: s(x, 120), 3),
+                                features=L(c.get("features"), lambda x: s(x, 60), 8), url=url_ok(c.get("url"), found)), 8),
                     forces={k: num(f.get(k), 1, 5, 3) for k in ["rivalry", "new_entrants", "substitutes", "buyer_power", "supplier_power"]},
                     differentiation=num(v.get("differentiation"), 0, 100, 40), gaps=L(v.get("gaps"), lambda x: s(x, 240), 5), moats=L(v.get("moats"), lambda x: s(x, 240), 5))
     if name == "finance":

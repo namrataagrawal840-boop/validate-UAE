@@ -112,10 +112,10 @@ def fan(band, money=False, height=300):
     chart(fig)
 
 
-def hbars(rows, height=None, fmt=lambda v: f"{v:.0%}", color="#aab3f2", log=False):
+def hbars(rows, height=None, fmt=lambda v: f"{v:.0%}", color="#aab3f2", log=False, xmax=None):
     names = [r[0] for r in rows][::-1]; vals = [max(r[1], 1e-9) for r in rows][::-1]
     fig = go.Figure(go.Bar(x=vals, y=names, orientation="h", marker=dict(color=color), text=[fmt(v) for v in vals], textposition="outside", cliponaxis=False))
-    xa = dict(visible=False, type="log", range=[np.log10(min(vals)) - 1, np.log10(max(vals)) + .45]) if log else dict(visible=False, range=[0, max(vals) * 1.3])
+    xa = dict(visible=False, type="log", range=[np.log10(min(vals)) - 1, np.log10(max(vals)) + .45]) if log else dict(visible=False, range=[0, (xmax or max(vals)) * 1.3])
     fig.update_layout(**{**PLOT, "height": height or 40 + 34 * len(rows)}, xaxis=xa, yaxis=dict(tickfont=dict(color="#2b3047")))
     chart(fig)
 
@@ -125,8 +125,8 @@ NAMES = dict(orch="Orchestrator", market="Market agent", customer="Customer agen
              usability="Ease-of-use agent", consistency="Consistency checker", kit="Experiment writer", critic="Critic")
 
 
-def run_analysis(intake, use_ai):
-    state = dict(intake=intake, agents={}, overrides={}, experiments=[], settings={}, applied=[])
+def run_analysis(intake, use_ai, competitors=None):
+    state = dict(intake=intake, agents={}, overrides={}, experiments=[], settings={}, applied=[], competitors=competitors or [])
     log = []
     if use_ai and AG.enabled():
         prog, out = {}, {}
@@ -204,6 +204,7 @@ def page_start():
                 fixed = c2.number_input("Fixed costs / month (AED)", min_value=0, value=0)
                 setupc = c3.number_input("Setup cost (AED)", min_value=0, value=0)
                 ev = st.text_area("Customer reviews, complaints or interview notes (one per line)")
+                kc = st.text_area("Competitors you already know, one per line: name, price per month in AED, what they offer", placeholder="ArabicKids Online, 400, live Arabic lessons for children\nKumon, 550, maths and English worksheets")
             ai_ok = AG.enabled()
             use_ai = st.checkbox("Use AI agents with web research", value=ai_ok, disabled=not ai_ok, help=None if ai_ok else "Add ANTHROPIC_API_KEY to the app's secrets to enable.")
             go_ = st.form_submit_button("Run the validation", type="primary", width="stretch")
@@ -215,7 +216,13 @@ def page_start():
                               min_payback_probability=minp, max_ruin_probability=maxr, horizon_months=horizon, price=price or None, fixed=fixed or None,
                               setup_budget=setupc or None, evidence_text=ev[:20000], use_ai=use_ai)
                 try:
-                    run_analysis(intake, use_ai); st.rerun()
+                    comps = []
+                    for line in (kc or "").splitlines()[:15]:
+                        parts = [x.strip() for x in line.split(",")]
+                        if parts and len(parts[0]) >= 2:
+                            pr = next((float(x) for x in parts[1:2] if x.replace(".", "", 1).isdigit()), None)
+                            comps.append(dict(name=parts[0][:120], type="direct", price_aed=pr, rating=None, note=", ".join(parts[2 if pr else 1:])[:240], features=[], url="", strengths=[], weaknesses=[]))
+                    run_analysis(intake, use_ai, comps); st.rerun()
                 except Exception as e:
                     st.error(f"Something went wrong: {e}")
 
@@ -428,6 +435,121 @@ def tab_value(r, state):
             if u.get("journey"): st.markdown("\n".join(f"{n + 1}. **{s['step']}** {s.get('note') or ''}" for n, s in enumerate(u["journey"])))
             for x in u.get("issues") or []: st.markdown(f"{pill(['', 'Minor', 'Major', 'Critical'][x['severity']], 'bad' if x['severity'] >= 3 else 'warn' if x['severity'] == 2 else '')} {x['issue']} ({x['heuristic']})", unsafe_allow_html=True)
             if not u.get("journey") and not u.get("measured"): st.caption("Run with AI agents, or enter a usability test on the Experiments tab.")
+
+
+def tab_competition(r, state):
+    c, f = r["competition"], r["stages"]["forecast"]
+    st.header("Competition: who already does this?")
+    src = {"typical": pill("Typical competitor types", "warn"), "yours": pill("Competitors you added", "good"), "ai": pill("Found by AI web research", "info"),
+           "yours+ai": pill("Yours + found by AI", "info")}[c["source"]]
+    st.markdown(f'{src} <span class="muted">{c["headline"]}</span>', unsafe_allow_html=True)
+    named = [x for x in c["competitors"] if x["source"] != "typical"]
+    top = c["competitors"][0] if c["competitors"] else None
+    k = st.columns(4)
+    kpi(k[0], 0, "Named competitors", str(len(named)), f"{sum(x['type'] == 'direct' for x in named)} direct" if named else "Add the ones you know below")
+    kpi(k[1], 1, "Closest rival", f"{round(top['similarity'] * 100)}% similar" if top else "–", top["name"] if top else "")
+    pb = c["price"]
+    kpi(k[2], 2, "Your price position", pb["position"].capitalize() if pb else "–", (f"You {aed(pb['yours'])} · rivals {aed(pb['low'])} to {aed(pb['high'])}" if pb['n'] > 1 else f"You {aed(pb['yours'])} · rival {aed(pb['low'])}") if pb else "Add rival prices to compare")
+    kpi(k[3], 3, "Competition score", f"{round(r['scores']['competition'])}/100", f"Rivalry {c['rivalry']:.1f}/5 · differentiation {round(c['differentiation'])}", "competition")
+    st.write("")
+    c1, c2 = st.columns(2)
+    with c1:
+        with st.container(border=True):
+            st.subheader("Positioning map")
+            fig = go.Figure()
+            pts = [x for x in c["competitors"] if x["price_aed"]]
+            cols = {"direct": "#e3a3a8", "indirect": "#f0c27a", "substitute": "#c9cff7"}
+            for t in ("direct", "indirect", "substitute"):
+                g = [x for x in pts if x["type"] == t]
+                if g:
+                    fig.add_trace(go.Scatter(x=[x["price_aed"] for x in g], y=[x["similarity"] * 100 for x in g], mode="markers+text", name=t.capitalize(),
+                                             text=[x["name"][:22] for x in g], textposition="top center", textfont=dict(size=11),
+                                             marker=dict(size=[12 + x["threat"] / 4 for x in g], color=cols[t], line=dict(color="#fff", width=1))))
+            fig.add_trace(go.Scatter(x=[r["assumptions"]["price"]["likely"]], y=[100], mode="markers+text", name="You", text=["You"], textposition="bottom center",
+                                     marker=dict(size=20, color=LINE, symbol="star")))
+            xs = [x["price_aed"] for x in pts] + [r["assumptions"]["price"]["likely"]]
+            fig.update_layout(**{**PLOT, "height": 330}, xaxis=dict(title="Price per customer per month (AED)", range=[min(xs) * .6, max(xs) * 1.35]), yaxis=dict(title="Similarity to your idea (%)", range=[-5, 115], gridcolor="#f1f2f7"),
+                              legend=dict(orientation="h", y=-0.25))
+            chart(fig)
+            st.caption("Bigger bubble = bigger threat. Rivals near the star sell something similar at a similar price.")
+    with c2:
+        with st.container(border=True):
+            st.subheader("Threat ranking")
+            hbars([(x["name"][:30], x["threat"]) for x in c["competitors"][:8]], fmt=lambda v: f"{v:.0f}/100", color="#e8c3c7", xmax=100)
+            math("competition")
+    with st.container(border=True):
+        st.subheader("Feature comparison")
+        mine = st.multiselect("What your idea offers (edit if wrong)", c["criteria"], default=c["yours"], key="your_feats")
+        if sorted(mine) != sorted(c["yours"]) and st.button("Update my features"):
+            recompute(lambda s: s.__setitem__("your_features", mine), "Your features were updated.")
+        rows = [{"Feature": k, "You": "✓" if k in c["yours"] else "", **{x["name"][:24]: "✓" if k in x["features"] else "" for x in c["competitors"][:7]}} for k in c["criteria"]]
+        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+        a1, a2 = st.columns(2)
+        a1.markdown("**Your edge (few rivals offer it)**\n" + ("\n".join(f"- {x}" for x in c["white_space"]) or "- None found yet: what would make you different?"))
+        a2.markdown("**Table stakes you are missing (most rivals offer it)**\n" + ("\n".join(f"- {x}" for x in c["table_stakes"]) or "- None: you cover what most rivals offer."))
+    st.subheader("Competitor profiles")
+    for x in c["competitors"]:
+        with st.container(border=True):
+            h1, h2 = st.columns([5, 1])
+            tag = {"yours": pill("Added by you", "good"), "ai": pill("Web source", "info"), "typical": pill("Typical type", "warn")}[x["source"]]
+            link = f' · <a href="{x["url"]}" target="_blank">website</a>' if x["url"].startswith("http") else ""
+            h1.markdown(f"**{x['name']}** {pill(x['type'])} {tag}<span class='muted'>{(' · ' + x['location']) if x['location'] else ''}{link}</span>", unsafe_allow_html=True)
+            h2.markdown(f"<div style='text-align:right'>{pill('Threat ' + str(round(x['threat'])), 'bad' if x['threat'] >= 55 else 'warn' if x['threat'] >= 30 else '')}</div>", unsafe_allow_html=True)
+            st.markdown(f"<span class='muted'>{x['note']}</span>", unsafe_allow_html=True)
+            m = st.columns(4)
+            m[0].markdown(f"<span class='muted'>Price</span><br>{aed(x['price_aed']) + '/month' if x['price_aed'] else (x['price_text'] or '–')}", unsafe_allow_html=True)
+            m[1].markdown(f"<span class='muted'>Rating</span><br>{x['rating']:.1f} / 5" if x["rating"] else "<span class='muted'>Rating</span><br>–", unsafe_allow_html=True)
+            m[2].markdown(f"<span class='muted'>Similar to you</span><br>{round(x['similarity'] * 100)}%", unsafe_allow_html=True)
+            m[3].markdown(f"<span class='muted'>Price closeness</span><br>{round(x['price_closeness'] * 100)}%", unsafe_allow_html=True)
+            if x["strengths"] or x["weaknesses"]:
+                s1, s2 = st.columns(2)
+                s1.markdown("**Strengths**\n" + "\n".join(f"- {y}" for y in x["strengths"]))
+                s2.markdown("**Weaknesses (your opening)**\n" + "\n".join(f"- {y}" for y in x["weaknesses"]))
+            if x["source"] == "yours":
+                idx = next((i for i, y in enumerate(state.get("competitors") or []) if y["name"] == x["name"]), None)
+                if idx is not None and st.button("Remove", key=f"rmc{idx}"):
+                    recompute(lambda s, i=idx: s["competitors"].pop(i), f"Removed {x['name']}.")
+    with st.container(border=True):
+        st.subheader("Add a competitor you know")
+        with st.form("addcomp", clear_on_submit=True):
+            a = st.columns([2, 1, 1, 1])
+            nm = a[0].text_input("Name"); ty = a[1].selectbox("Type", ["direct", "indirect", "substitute"], help="Direct: same offer, same customers. Indirect: different offer, same need. Substitute: what people do instead.")
+            pr = a[2].number_input("Price / customer / month (AED)", 0.0); rt = a[3].number_input("Rating (0-5, optional)", 0.0, 5.0, 0.0, .1)
+            ds = st.text_input("What they offer, in a sentence")
+            b = st.columns(2)
+            fe = b[0].multiselect("Features they offer", c["criteria"]); ur = b[1].text_input("Website (optional)")
+            b = st.columns(2)
+            sg = b[0].text_input("Strengths (comma-separated)"); wk = b[1].text_input("Weaknesses (comma-separated)")
+            if st.form_submit_button("Add competitor", type="primary"):
+                if len(nm.strip()) < 2: st.error("Enter the competitor's name.")
+                else:
+                    e = dict(name=nm.strip()[:120], type=ty, price_aed=pr or None, rating=rt or None, note=ds[:240], features=fe, url=ur.strip()[:300] if ur.strip().startswith("http") else "",
+                             strengths=[y.strip() for y in sg.split(",") if y.strip()][:3], weaknesses=[y.strip() for y in wk.split(",") if y.strip()][:3])
+                    recompute(lambda s: s.setdefault("competitors", []).append(e), f"Added {e['name']}. Everything was recalculated.")
+    c1, c2 = st.columns(2)
+    with c1:
+        with st.container(border=True):
+            st.subheader("Five forces")
+            fo = c["forces"]
+            if fo:
+                names = dict(rivalry="Rivalry", new_entrants="New entrants", substitutes="Substitutes", buyer_power="Buyer power", supplier_power="Supplier power")
+                hbars([(names[k], v) for k, v in fo.items() if k in names], fmt=lambda v: f"{v:.1f}/5", color="#c9cff7", xmax=5)
+                st.caption("1 = weak pressure, 5 = strong. Rivalry blends the AI's score with the competitors you named." if c["derived_rivalry"] and len(fo) > 1 else "Rivalry comes from the competitors named here; the AI scores all five forces.")
+            else: st.caption("Name competitors or run with AI agents to score the forces.")
+    with c2:
+        with st.container(border=True):
+            st.subheader("In the simulation")
+            ab = f["abm"]
+            cp = pct(.15 * min(1.7, max(.4, c['rivalry'] / 3)))
+            if ab["runs_with_competitor_reaction"] > 0:
+                st.markdown(f"A local competitor hit back (price cuts and promotions) in **{pct(ab['runs_with_competitor_reaction'])}** of the {num(f['runs'])} market replays, "
+                            f"about {ab['competitor_reactions']:.1f} times per replay. Each reaction cuts your new customers by 20% and raises your cost per customer by 25% for 4 months.")
+            else:
+                st.markdown(f"No competitor hit back in the {num(f['runs'])} market replays: rivals react once you take about 3% of the buyers within reach, and this plan stays below that. "
+                            f"If you grow past it, a rival reacts with a {cp} chance each month.")
+            st.caption(f"Rivalry {c['rivalry']:.1f}/5 sets that monthly chance ({cp}).")
+            if c["gaps"]: st.markdown("**Gaps rivals leave open**\n" + "\n".join(f"- {g}" for g in c["gaps"]))
+            if c["moats"]: st.markdown("**What could protect you**\n" + "\n".join(f"- {g}" for g in c["moats"]))
 
 
 def tab_improve(r, state):
@@ -657,7 +779,7 @@ def summary_text(r):
     f = r["stages"]["forecast"]
     return "\n".join([f"ValidateUAE report", r["idea"]["brief"], "", f"Decision: {r['decision']['label']}", *[f"- {x}" for x in r["decision"]["reasons"]], "",
                       f"Validation score {round(r['validation']['score'])}/100 ({r['validation']['verdict']})", f"Payback chance {pct(f['p_payback'])}; exceeds budget {pct(f['p_ruin'])}; expected NPV {aed(f['npv_mean'])}",
-                      f"Evidence strength {pct(r['evidence']['strength'])}", "", "Stop rules:", *[f"- {x}" for x in r["kill_criteria"]], "", "Next tests:", *[f"- {s['experiment']} ({s['why']})" for s in r["next_steps"]],
+                      f"Evidence strength {pct(r['evidence']['strength'])}", "", f"Competition: {r['competition']['headline']}", "", "Stop rules:", *[f"- {x}" for x in r["kill_criteria"]], "", "Next tests:", *[f"- {s['experiment']} ({s['why']})" for s in r["next_steps"]],
                       "", "Decision support only, not financial advice."])
 
 
@@ -669,8 +791,8 @@ def page_report():
         for k in ("result", "state", "lab_out", "log"): ss.pop(k, None)
         st.rerun()
     if ss.get("flash"): st.success(ss.pop("flash"))
-    tabs = st.tabs(["Decision", "Funnel", "Customer value", "Improve my idea", "What-if lab", "Experiments", "Audit", "Assumptions & sources"])
-    fns = [tab_decision, tab_funnel, tab_value, tab_improve, tab_lab, tab_experiments, tab_audit, tab_sources]
+    tabs = st.tabs(["Decision", "Funnel", "Customer value", "Competition", "Improve my idea", "What-if lab", "Experiments", "Audit", "Assumptions & sources"])
+    fns = [tab_decision, tab_funnel, tab_value, tab_competition, tab_improve, tab_lab, tab_experiments, tab_audit, tab_sources]
     for t, fn in zip(tabs, fns):
         with t: fn(r, state)
 
