@@ -2,7 +2,7 @@
 import streamlit as st
 
 from app import store
-from ui import report, evidence, finance, insights, lab, decision
+from ui import report, evidence, finance, insights, lab, decision, monitor
 from ui.common import ss, user_id
 
 
@@ -26,6 +26,7 @@ SECTIONS = {
     "Improve my idea": report.tab_improve,
     "What-if lab": report.tab_lab,
     "Funnel (all 10 stages)": report.tab_funnel,
+    "Monitoring": monitor.page,
     "Audit": report.tab_audit,
     "Assumptions and sources": report.tab_sources,
 }
