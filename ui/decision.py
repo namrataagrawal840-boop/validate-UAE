@@ -4,7 +4,7 @@ import json
 import streamlit as st
 
 from ui import report
-from ui.common import ss, esc, pct, aed, kpi, math, section, PASTEL, STATUS
+from ui.common import ss, esc, pct, aed, kpi, math, section, soft, PASTEL, STATUS
 
 BANNER = {"launch": "mint", "pivot": "sky", "test": "butter", "stop": "rose"}
 
@@ -49,6 +49,22 @@ def page(r, state):
         kpi(k[0], 0, f"Chance of paying back in {f['horizon']} months", pct(f["p_payback"]), f"You need {pct(L['min_payback'])}", "p_payback")
         kpi(k[1], 2, "Chance of needing more than your budget", pct(f["p_ruin"]), f"Your limit {pct(L['max_ruin'])}", "p_ruin")
         kpi(k[2], 1, "Evidence confidence", pct(b["confidence"]), f"{b['hypotheses']['validated']} validated · {b['hypotheses']['disproved']} disproved hypotheses", "evidence")
+    pn = state.get("panel")
+    if pn:
+        from app import panel as PN
+        ps = PN.synthesise(pn, r)
+        x1, x2 = st.columns([5, 1.4])
+        x1.markdown(soft(f"<b>Simulated customer panel:</b> {esc(ps['verdict'].lower())}. {esc(ps['headline'])} Top objection: "
+                         f"“{esc(ps['objections'][0]['title'] if ps['objections'] else 'none')}”. <span class='muted'>Simulated, so it is not counted as evidence.</span>", "lavender"),
+                    unsafe_allow_html=True)
+        if x2.button("Open Customer panel", key="g_panel", width="stretch"):
+            ss.section = "Customer panel"; st.rerun()
+    else:
+        x1, x2 = st.columns([5, 1.4])
+        x1.markdown(soft("No research yet? Run the <b>Customer panel</b>: simulated UAE customers react to your idea, debate it and show the likely objections.", "lavender"),
+                    unsafe_allow_html=True)
+        if x2.button("Run a customer panel", key="g_panel0", width="stretch"):
+            ss.section = "Customer panel"; st.rerun()
     c1, c2 = st.columns(2)
     with c1:
         with st.container(border=True):
