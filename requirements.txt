@@ -1,0 +1,8 @@
+# Streamlit Community Cloud installs these (streamlit_app.py)
+streamlit>=1.50
+plotly>=5.20
+pandas>=2.0
+numpy>=1.26
+scipy>=1.11
+scikit-learn>=1.4
+anthropic>=0.40

@@ -1,4 +1,4 @@
-/* Calm, white, pastel. Every box that carries a key detail gets a soft pastel tint. */
+/* Calm and white. Pastel only on the headline numbers and the decision banner; everything else is white with thin grey borders. */
 :root {
   --bg: #ffffff; --surface: #ffffff; --ink: #2b3047; --muted: #6b7189; --faint: #9aa0b4; --line: #eceef4;
   --primary: #6470dc; --primary-ink: #ffffff; --primary-soft: #eef0fd;
@@ -56,13 +56,12 @@ input[type=checkbox] { width: 18px; min-height: 18px; accent-color: #8f9aee; }
 .t-good { background: var(--good-soft); color: var(--good); } .t-warn { background: var(--warn-soft); color: var(--warn); } .t-bad { background: var(--bad-soft); color: var(--bad); }
 .t-info { background: var(--info-soft); color: var(--info); } .t-neutral { background: #f3f4f8; color: var(--muted); }
 
-/* Key-detail boxes: a soft pastel each, cycling through the palette */
+/* Headline number boxes: four soft pastels; extra boxes stay neutral */
 .stat { border-radius: 14px; padding: 16px 18px; background: var(--lavender); border: 1px solid var(--lavender-b); }
 .grid > .stat:nth-child(6n+2), .grid > *:nth-child(6n+2) > .stat { background: var(--mint); border-color: var(--mint-b); }
 .grid > .stat:nth-child(6n+3), .grid > *:nth-child(6n+3) > .stat { background: var(--peach); border-color: var(--peach-b); }
 .grid > .stat:nth-child(6n+4), .grid > *:nth-child(6n+4) > .stat { background: var(--sky); border-color: var(--sky-b); }
-.grid > .stat:nth-child(6n+5) { background: var(--butter); border-color: var(--butter-b); }
-.grid > .stat:nth-child(6n+6) { background: var(--rose); border-color: var(--rose-b); }
+.grid > .stat:nth-child(n+5), .grid > *:nth-child(n+5) > .stat { background: #fff; border-color: var(--line); }
 .stat .v { font-size: 26px; font-weight: 700; letter-spacing: -.02em; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--ink); }
 .stat .l { font-size: 13.5px; color: var(--muted); font-weight: 500; }
 
@@ -78,11 +77,7 @@ input[type=checkbox] { width: 18px; min-height: 18px; accent-color: #8f9aee; }
 .decision button.link { color: #4b55b8; }
 
 /* Pastel cards for the main summaries (cycle through cards in grids on the decision page) */
-.card.pastel { background: var(--lavender); border-color: var(--lavender-b); box-shadow: none; }
-.grid > .card:nth-child(4n+1).tint { background: var(--lavender); border-color: var(--lavender-b); }
-.grid > .card:nth-child(4n+2).tint { background: var(--mint); border-color: var(--mint-b); }
-.grid > .card:nth-child(4n+3).tint { background: var(--peach); border-color: var(--peach-b); }
-.grid > .card:nth-child(4n+4).tint { background: var(--sky); border-color: var(--sky-b); }
+.card.pastel { background: #fff; border-color: var(--line); box-shadow: none; }
 
 .hbar { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 2fr) auto; gap: 12px; align-items: center; padding: 6px 0; font-size: 14.5px; }
 .bar { height: 10px; border-radius: 999px; background: #f1f2f7; overflow: hidden; }
@@ -93,33 +88,28 @@ th { color: var(--muted); font-weight: 600; font-size: 13px; background: #fafbfe
 tr:last-child td { border-bottom: 0; }
 .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .scroll { overflow-x: auto; }
-.stage { border-left: 5px solid var(--lavender-b); }
-.stage:nth-of-type(6n+1) { border-left-color: var(--mint-b); } .stage:nth-of-type(6n+2) { border-left-color: var(--peach-b); }
-.stage:nth-of-type(6n+3) { border-left-color: var(--sky-b); } .stage:nth-of-type(6n+4) { border-left-color: var(--butter-b); } .stage:nth-of-type(6n+5) { border-left-color: var(--rose-b); }
-.stage .n { width: 36px; height: 36px; border-radius: 50%; background: var(--lavender); color: #4b55b8; font-weight: 700; display: grid; place-items: center; flex: none; }
+.stage { border-left: 1px solid var(--line); }
+.stage .n { width: 36px; height: 36px; border-radius: 50%; background: #f3f4f8; color: #4b55b8; font-weight: 700; display: grid; place-items: center; flex: none; }
 .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 10px; margin: 14px 0; }
 .meta div { background: #fafbfe; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font-size: 14px; }
-.meta div:nth-child(6n+1) { background: var(--lavender); border-color: var(--lavender-b); } .meta div:nth-child(6n+2) { background: var(--mint); border-color: var(--mint-b); }
-.meta div:nth-child(6n+3) { background: var(--peach); border-color: var(--peach-b); } .meta div:nth-child(6n+4) { background: var(--sky); border-color: var(--sky-b); }
-.meta div:nth-child(6n+5) { background: var(--butter); border-color: var(--butter-b); } .meta div:nth-child(6n+6) { background: var(--rose); border-color: var(--rose-b); }
 .meta b { display: block; font-size: 12px; color: var(--faint); font-weight: 600; margin-bottom: 2px; }
 .drawer { position: fixed; inset: 0; z-index: 60; display: flex; justify-content: flex-end; background: rgba(43, 48, 71, .18); backdrop-filter: blur(2px); }
 .drawer .sheet { width: min(560px, 100%); height: 100%; background: #fff; overflow-y: auto; padding: 28px; box-shadow: -12px 0 40px rgba(43, 48, 71, .08); border-radius: 20px 0 0 20px; }
-.formula { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13.5px; background: var(--lavender); border: 1px solid var(--lavender-b); border-radius: 12px; padding: 14px 16px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }
+.formula { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13.5px; background: #f7f8fb; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }
 .steps { list-style: none; padding: 0; margin: 0; }
 .steps li { display: grid; grid-template-columns: 30px 1fr; gap: 10px; padding: 8px 0; align-items: start; }
 .dot { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; background: #f3f4f8; color: var(--muted); }
 .dot.done { background: var(--mint); color: var(--good); } .dot.working { background: var(--sky); color: var(--info); } .dot.fallback { background: var(--butter); color: var(--warn); }
 .mix { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: #f1f2f7; }
 .mix i { display: block; height: 100%; }
-.callout { border: 1px solid var(--sky-b); background: var(--sky); padding: 14px 18px; border-radius: 14px; }
+.callout { border: 1px solid var(--line); background: #fafbfd; padding: 14px 18px; border-radius: 14px; }
 .callout.warn { border-color: var(--butter-b); background: var(--butter); }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13.5px; color: var(--muted); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend i { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
 details { border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; background: #fff; }
 summary { cursor: pointer; font-weight: 600; }
-code { background: var(--lavender); padding: 1px 6px; border-radius: 6px; font-size: 13px; }
+code { background: #f3f4f8; padding: 1px 6px; border-radius: 6px; font-size: 13px; }
 .footer { border-top: 1px solid var(--line); padding: 28px 0; color: var(--faint); font-size: 13px; }
 .recharts-cartesian-grid line { stroke: #f1f2f7; }
 @media (max-width: 640px) {

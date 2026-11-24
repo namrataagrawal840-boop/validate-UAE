@@ -68,6 +68,22 @@ The site works without a key (it uses category priors), but the AI research agen
 3. Open **API keys** → **Create key**, name it `validate-uae`, and copy it. It is shown only once.
 4. Never paste the key into the code or commit it. Put it in your hosting provider's secret settings (below) or in a local `.env` file, which is git-ignored.
 
+## Put it online with Streamlit (easiest, free)
+
+The file `streamlit_app.py` is a Streamlit version of the same app. It uses the same agents, funnel and agent-based simulation, with the same tabs.
+
+1. Go to [share.streamlit.io](https://share.streamlit.io) and sign in with GitHub.
+2. Click **Create app** → **Deploy a public app from GitHub**.
+3. Repository: `namrataagrawal840-boop/validate-UAE`, branch: `main`, main file path: `streamlit_app.py`.
+4. Optional: choose a custom address under **App URL**, for example `validate-uae`.
+5. Open **Advanced settings**. Pick Python 3.12 and paste this into **Secrets** (leave it out to run without AI):
+   ```toml
+   ANTHROPIC_API_KEY = "sk-ant-..."
+   ```
+6. Click **Deploy**. The first build takes a few minutes. If GitHub asks for permission to private repositories, allow it.
+
+Every push to `main` redeploys automatically. Run it locally with `pip install -r requirements.txt` and `streamlit run streamlit_app.py`.
+
 ## Put it online with a public link (Hugging Face Spaces, free)
 
 Hugging Face Spaces runs this Docker app for free on 2 CPUs, enough for the agent-based simulation. This repository is set up so that **every push to GitHub updates the website automatically**.

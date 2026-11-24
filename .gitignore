@@ -11,3 +11,6 @@ backend/data/
 .env
 .env.*
 !.env.example
+
+# Streamlit secrets (never commit)
+.streamlit/secrets.toml
