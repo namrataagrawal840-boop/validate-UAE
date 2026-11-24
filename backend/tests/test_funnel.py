@@ -155,8 +155,13 @@ def test_budget_hard_limit():
 # ---------- API ----------
 def test_api_flow(tmp_path, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    from app import main
+    monkeypatch.setenv("DB_PATH", str(tmp_path / "flow.db"))
+    import importlib
+    from app import main, store
+    store.reset_engine(); importlib.reload(main)
     client = TestClient(main.app)
+    tok = client.post("/api/auth/register", json=dict(username="flowuser", password="s3cure-pass")).json()["token"]
+    client.headers.update({"Authorization": f"Bearer {tok}"})
     r = client.post("/api/analyses", json=dict(idea="A cloud kitchen delivering healthy office lunches in Business Bay.", business_type="kitchen", emirate="Dubai"))
     id = r.json()["id"]
     import time

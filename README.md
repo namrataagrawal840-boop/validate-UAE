@@ -72,21 +72,43 @@ The site works without a key (it uses category priors), but the AI research agen
 
 The **Competition** tab shows who already does the same or a very similar thing. Competitors come from three places: ones you type in (on the start form or the tab), real UAE businesses the competition agent finds on the web with links (needs an API key), and typical competitor types for the category when neither is available. Each competitor gets a TF-IDF similarity to your idea, a price-closeness score and a threat score (0-100). The tab also shows a positioning map (price vs similarity), a feature comparison with your edge and the table stakes you are missing, a price benchmark and the five forces. Named competitors raise rivalry and lower differentiation, which feed the buying model and make the simulated competitor react more often.
 
+## The workspace (Streamlit app)
+
+Sign in, then work through a project in this order:
+
+| Section | What it does |
+|---|---|
+| **My projects** | Saved projects with their decision (Launch, Test first, Pivot, Stop), validation score and evidence confidence |
+| **New project** | Four guided steps (idea, market and customer, money, existing evidence) with a progress bar, skippable optional questions and plain explanations of every business term |
+| **Decision** | The recommendation and its reasons, validation score with its confidence range, strongest evidence, weakest assumptions, financial risks, missing evidence and the next five actions |
+| **Evidence ledger** | Every claim with its source link or uploaded file, date, geography, evidence type, sample size, verification, confidence and limitations |
+| **Validation lab** | Hypotheses with thresholds, generated plans, interview questionnaires, surveys, landing-page copy, recorded results and uploads, and expected vs actual |
+| **Financials** | Three scenarios from the simulation (bad, typical, good), break-even, cash runway, a sensitivity tornado and money-related evidence gaps |
+| **Market and customers** | Market insights and pain points, each labelled as your evidence, a web source, an AI estimate or a model estimate |
+| **Competition**, **Improve my idea**, **What-if lab**, **Funnel**, **Audit**, **Assumptions and sources** | The ten-stage engine, unchanged |
+| **Monitoring** | Real monthly revenue, expenses, customers, conversion, repeat purchases and CAC against the forecast frozen at launch |
+
+**How evidence is treated.** Each ledger record is weighted by type (observed transactions 1.0, observed behaviour 0.85, direct feedback 0.6, secondary research 0.4, AI estimates 0, synthetic simulations 0), verification, confidence, geography, sample size and age. AI output and the simulation are shown for transparency but never raise confidence and are never presented as customer behaviour. A recommendation to launch needs at least 35% evidence confidence. Hypothesis status changes only when a result is recorded.
+
 ## Put it online with Streamlit (easiest, free)
 
-The file `streamlit_app.py` is a Streamlit version of the same app. It uses the same agents, funnel and agent-based simulation, with the same tabs.
-
-1. Go to [share.streamlit.io](https://share.streamlit.io) and sign in with GitHub.
-2. Click **Create app** → **Deploy a public app from GitHub**.
-3. Repository: `namrataagrawal840-boop/validate-UAE`, branch: `main`, main file path: `streamlit_app.py`.
-4. Optional: choose a custom address under **App URL**, for example `validate-uae`.
-5. Open **Advanced settings**. Pick Python 3.12 and paste this into **Secrets** (leave it out to run without AI):
+1. **Create a free database** so accounts and projects survive restarts (Streamlit Cloud wipes local files when the app restarts). Go to [neon.tech](https://neon.tech), sign up, create a project and copy the connection string (it starts with `postgresql://`).
+2. Go to [share.streamlit.io](https://share.streamlit.io) and sign in with GitHub.
+3. Click **Create app** → **Deploy a public app from GitHub**.
+4. Repository: `namrataagrawal840-boop/validate-UAE`, branch: `main`, main file path: `streamlit_app.py`.
+5. Optional: choose a custom address under **App URL**, for example `validate-uae`.
+6. Open **Advanced settings**, pick Python 3.12 and paste into **Secrets**:
    ```toml
-   ANTHROPIC_API_KEY = "sk-ant-..."
+   DATABASE_URL = "postgresql://user:password@host/dbname?sslmode=require"
+   SECRET_KEY = "any long random text"
+   ANTHROPIC_API_KEY = "sk-ant-..."   # optional: AI web research
+   ALLOW_SIGNUP = "true"              # set "false" once everyone has an account
    ```
-6. Click **Deploy**. The first build takes a few minutes. If GitHub asks for permission to private repositories, allow it.
+7. Click **Deploy**. The first build takes a few minutes.
 
-Every push to `main` redeploys automatically. Run it locally with `pip install -r requirements.txt` and `streamlit run streamlit_app.py`.
+Without `DATABASE_URL` the app still works, using a local SQLite file, but accounts and projects disappear whenever Streamlit Cloud restarts the app. Every push to `main` redeploys automatically. Run it locally with `pip install -r requirements.txt` and `streamlit run streamlit_app.py`.
+
+**Security.** Passwords are stored as salted PBKDF2-SHA256 hashes, and an account locks for 10 minutes after 5 failed attempts. Every database query for project data checks the owner, so one user can never open another user's project. Secrets come only from Streamlit secrets or environment variables. Uploaded files are limited to 5 MB and stored in the database. The FastAPI server behind the website requires a signed login token on every project endpoint.
 
 ## Put it online with a public link (Hugging Face Spaces, free)
 
@@ -166,6 +188,11 @@ docs/METHODOLOGY.md  formulas and design choices
 ```
 
 ## Known limits
+
+- The evidence ledger, validation lab, financial scenarios, decision dashboard and monitoring are in the Streamlit app. The Next.js website has login and per-user projects but still shows the original report tabs.
+- There is no password reset or email verification (no email service is connected). An admin can delete a user row in the database.
+- PostgreSQL support uses the same SQLAlchemy code as SQLite, but the automated tests run on SQLite.
+- Uploaded files are not virus-scanned; only common document and image types up to 5 MB are accepted.
 
 - Population shares, category ranges and the UAE population scale are illustrative priors.
 - AI agents can be wrong. Every number shows its label (prior, AI estimate, web source, founder, measured), and URLs the model did not actually retrieve are removed.

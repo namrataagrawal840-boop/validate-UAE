@@ -9,7 +9,8 @@ from pathlib import Path
 from typing import Literal, Optional
 
 import numpy as np
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -18,6 +19,7 @@ from pydantic import BaseModel, Field, field_validator
 from . import agents as AG
 from . import priors as P
 from .compute import compute, what_if
+from . import store
 
 DB = os.getenv("DB_PATH", str(Path(__file__).resolve().parent.parent / "data" / "validate.db"))
 Path(DB).parent.mkdir(parents=True, exist_ok=True)
@@ -27,6 +29,8 @@ _lock = threading.Lock()
 def db():
     c = sqlite3.connect(DB, check_same_thread=False); c.row_factory = sqlite3.Row
     c.execute("create table if not exists analyses (id text primary key, created real, status text, state text, result text, progress text, error text, outcome text)")
+    if "user_id" not in [r[1] for r in c.execute("pragma table_info(analyses)").fetchall()]:
+        c.execute("alter table analyses add column user_id text")  # older databases: rows without an owner are hidden from everyone
     return c
 
 
@@ -51,10 +55,10 @@ def save(id, **kw):
         c.execute(f"update analyses set {sets} where id=?", [*(to_json(v) if k in ("state", "result", "progress", "outcome") else v for k, v in kw.items()), id])
 
 
-def load(id):
+def load(id, uid):
     with db() as c:
-        r = c.execute("select * from analyses where id=?", (id,)).fetchone()
-    if not r: raise HTTPException(404, "Analysis not found")
+        r = c.execute("select * from analyses where id=? and user_id=?", (id, uid)).fetchone()
+    if not r: raise HTTPException(404, "Analysis not found")  # same answer for "missing" and "someone else's"
     d = dict(r)
     for k in ("state", "result", "progress", "outcome"):
         d[k] = json.loads(d[k]) if d[k] else None
@@ -90,6 +94,54 @@ app = FastAPI(title="ValidateUAE API", version="1.0")
 app.add_middleware(CORSMiddleware, allow_origins=[o for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",") if o], allow_methods=["*"], allow_headers=["*"])
 
 
+@app.exception_handler(Exception)
+async def unexpected(request: Request, exc: Exception):
+    import logging
+    logging.getLogger("validateuae").exception("Unhandled error on %s", request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "Something went wrong on the server. Please try again."})
+
+
+def current_user(authorization: Optional[str] = Header(None)) -> str:
+    """Bearer token from /api/auth/login. Every project endpoint requires it."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(401, "Log in first.", headers={"WWW-Authenticate": "Bearer"})
+    try:
+        uid = store.read_token(authorization.split(" ", 1)[1].strip())
+        store.get_user(uid)
+    except (store.AuthError, store.NotFound) as e:
+        raise HTTPException(401, str(e) if isinstance(e, store.AuthError) else "Log in again.", headers={"WWW-Authenticate": "Bearer"})
+    return uid
+
+
+class Credentials(BaseModel):
+    username: str = Field(min_length=3, max_length=64)
+    password: str = Field(min_length=1, max_length=200)
+
+
+@app.post("/api/auth/register")
+def register(c: Credentials):
+    if os.getenv("ALLOW_SIGNUP", "true").lower() == "false": raise HTTPException(403, "New accounts are closed.")
+    try:
+        u = store.create_user(c.username, c.password)
+    except store.AuthError as e:
+        raise HTTPException(400, str(e))
+    return dict(token=store.make_token(u["id"]), username=u["username"])
+
+
+@app.post("/api/auth/login")
+def login(c: Credentials):
+    try:
+        u = store.authenticate(c.username, c.password)
+    except store.AuthError as e:
+        raise HTTPException(401, str(e))
+    return dict(token=store.make_token(u["id"]), username=u["username"])
+
+
+@app.get("/api/auth/me")
+def me(uid: str = Depends(current_user)):
+    return store.get_user(uid)
+
+
 @app.get("/api/health")
 def health():
     return dict(ok=True, ai_enabled=AG.enabled(), model=AG.MODEL if AG.enabled() else None)
@@ -120,25 +172,26 @@ def run_job(id, state, use_ai):
 
 
 @app.post("/api/analyses")
-def create(intake: Intake):
+def create(intake: Intake, uid: str = Depends(current_user)):
     id = uuid.uuid4().hex[:12]
     state = dict(intake=intake.model_dump(), agents={}, overrides={}, experiments=[], settings={})
     with _lock, db() as c:
-        c.execute("insert into analyses values (?,?,?,?,?,?,?,?)", (id, time.time(), "running", to_json(state), None, "[]", None, None))
+        c.execute("insert into analyses (id, created, status, state, result, progress, error, outcome, user_id) values (?,?,?,?,?,?,?,?,?)",
+                  (id, time.time(), "running", to_json(state), None, "[]", None, None, uid))
     threading.Thread(target=run_job, args=(id, state, intake.use_ai), daemon=True).start()
     return dict(id=id)
 
 
 @app.get("/api/analyses")
-def list_analyses():
+def list_analyses(uid: str = Depends(current_user)):
     with db() as c:
-        rows = c.execute("select id, created, status, state from analyses order by created desc limit 30").fetchall()
+        rows = c.execute("select id, created, status, state from analyses where user_id=? order by created desc limit 30", (uid,)).fetchall()
     return [dict(id=r["id"], created=r["created"], status=r["status"], idea=json.loads(r["state"])["intake"]["idea"][:140]) for r in rows]
 
 
 @app.get("/api/analyses/{id}")
-def get(id: str):
-    d = load(id)
+def get(id: str, uid: str = Depends(current_user)):
+    d = load(id, uid)
     return dict(id=id, status=d["status"], progress=d["progress"], error=d["error"], result=d["result"], outcome=d["outcome"],
                 sources=(d["state"] or {}).get("sources", {}), agents=(d["state"] or {}).get("agents", {}), agent_errors=(d["state"] or {}).get("agent_errors", {}),
                 experiments=(d["state"] or {}).get("experiments", []), overrides=(d["state"] or {}).get("overrides", {}))
@@ -178,26 +231,26 @@ class Experiment(BaseModel):
         return {k: v for k, v in self.model_dump().items() if v not in (None, [], "")}
 
 
-def recompute(id, mutate):
-    d = load(id)
+def recompute(id, mutate, uid):
+    d = load(id, uid)
     if d["status"] != "done": raise HTTPException(409, "Analysis is not finished yet")
     state = d["state"]; mutate(state)
     result = compute(state); save(id, state=state, result=result)
-    return get(id)
+    return get(id, uid)
 
 
 @app.post("/api/analyses/{id}/experiments")
-def add_experiment(id: str, e: Experiment):
+def add_experiment(id: str, e: Experiment, uid: str = Depends(current_user)):
     x = e.check()
-    return recompute(id, lambda s: s.setdefault("experiments", []).append(x))
+    return recompute(id, lambda s: s.setdefault("experiments", []).append(x), uid)
 
 
 @app.delete("/api/analyses/{id}/experiments/{i}")
-def remove_experiment(id: str, i: int):
+def remove_experiment(id: str, i: int, uid: str = Depends(current_user)):
     def m(s):
         if not 0 <= i < len(s.get("experiments", [])): raise HTTPException(404, "No such experiment")
         s["experiments"].pop(i)
-    return recompute(id, m)
+    return recompute(id, m, uid)
 
 
 class Overrides(BaseModel):
@@ -227,23 +280,23 @@ def clean_over(o: Overrides):
 
 
 @app.post("/api/analyses/{id}/whatif")
-def whatif(id: str, o: Overrides):
-    d = load(id); ov, st = clean_over(o)
+def whatif(id: str, o: Overrides, uid: str = Depends(current_user)):
+    d = load(id, uid); ov, st = clean_over(o)
     return to_jsonable(what_if(d["state"], ov, st))
 
 
 @app.post("/api/analyses/{id}/apply")
-def apply(id: str, o: Overrides):
+def apply(id: str, o: Overrides, uid: str = Depends(current_user)):
     ov, st = clean_over(o)
     def m(s):
         s["overrides"] = {**s.get("overrides", {}), **ov}; s["settings"] = {**s.get("settings", {}), **st}
-    return recompute(id, m)
+    return recompute(id, m, uid)
 
 
 @app.post("/api/analyses/{id}/reset")
-def reset(id: str):
+def reset(id: str, uid: str = Depends(current_user)):
     def m(s): s["overrides"] = {}; s["settings"] = {}
-    return recompute(id, m)
+    return recompute(id, m, uid)
 
 
 class VariantPick(BaseModel):
@@ -251,20 +304,20 @@ class VariantPick(BaseModel):
 
 
 @app.post("/api/analyses/{id}/variants")
-def apply_variant(id: str, v: VariantPick):
-    d = load(id)
+def apply_variant(id: str, v: VariantPick, uid: str = Depends(current_user)):
+    d = load(id, uid)
     found = next((x for x in ((d["result"] or {}).get("improve") or {}).get("variants", []) if x["id"] == v.variant_id), None)
     if not found: raise HTTPException(404, "No such variant")
     def m(s):
         if all(a["id"] != found["id"] for a in s.get("applied", [])):
             s.setdefault("applied", []).append(dict(id=found["id"], name=found["name"], changes=found["changes"]))
-    return recompute(id, m)
+    return recompute(id, m, uid)
 
 
 @app.delete("/api/analyses/{id}/variants/{vid}")
-def remove_variant(id: str, vid: str):
+def remove_variant(id: str, vid: str, uid: str = Depends(current_user)):
     def m(s): s["applied"] = [a for a in s.get("applied", []) if a["id"] != vid]
-    return recompute(id, m)
+    return recompute(id, m, uid)
 
 
 @app.get("/api/sus-questions")
@@ -279,15 +332,15 @@ class Outcome(BaseModel):
 
 
 @app.post("/api/analyses/{id}/outcome")
-def outcome(id: str, o: Outcome):
-    load(id); save(id, outcome=o.model_dump()); return dict(ok=True)
+def outcome(id: str, o: Outcome, uid: str = Depends(current_user)):
+    load(id, uid); save(id, outcome=o.model_dump()); return dict(ok=True)
 
 
 @app.get("/api/calibration")
-def calibration():
+def calibration(uid: str = Depends(current_user)):
     """Step 7, monitoring: once real outcomes are recorded, compare forecasts with what happened."""
     with db() as c:
-        rows = c.execute("select result, outcome from analyses where outcome is not null and result is not null").fetchall()
+        rows = c.execute("select result, outcome from analyses where outcome is not null and result is not null and user_id=?", (uid,)).fetchall()
     pairs = []
     for r in rows:
         res, out = json.loads(r["result"]), json.loads(r["outcome"])

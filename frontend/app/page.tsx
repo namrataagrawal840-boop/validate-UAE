@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
+import { LogoutLink } from '@/components/LogoutLink';
 
 const EXAMPLES = [
   { idea: 'A cloud kitchen in Business Bay delivering healthy, high-protein lunches to office workers, ordered through our own app and the delivery platforms.', business_type: 'kitchen', emirate: 'Dubai', setup: 'Mainland', target_customer: 'Office workers aged 25-45 in Business Bay and DIFC', budget_aed: 600000 },
@@ -27,7 +28,7 @@ export default function Home() {
   }
   return (
     <>
-      <header className="topbar"><div className="container"><a className="brand" href="/"><i />ValidateUAE</a></div></header>
+      <header className="topbar"><div className="container"><a className="brand" href="/"><i />ValidateUAE</a><LogoutLink /></div></header>
       <main className="container page">
         <div className="grid g2" style={{ alignItems: 'start', gap: 32 }}>
           <div className="stack">

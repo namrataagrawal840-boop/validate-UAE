@@ -14,3 +14,6 @@ backend/data/
 
 # Streamlit secrets (never commit)
 .streamlit/secrets.toml
+
+# local databases
+data/

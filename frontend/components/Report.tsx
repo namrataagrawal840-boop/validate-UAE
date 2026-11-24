@@ -6,6 +6,7 @@ import { makeExplain } from '@/lib/explain';
 import { Badge, LabelBadge, Stat, HBar, MathProvider, MathButton, scoreTone, scoreWord, Source } from './ui';
 import { FanChart, CurveChart, Tornado } from './charts';
 import { ValidationCard, IdeaCard, summaryText, MarketSizing, CustomerValue, Improve, Kit, ExtraResults, SusHelper } from './Extra';
+import { LogoutLink } from '@/components/LogoutLink';
 
 const TABS = [['decision', 'Decision'], ['funnel', 'Funnel'], ['value', 'Customer value'], ['improve', 'Improve my idea'], ['lab', 'What-if lab'], ['experiments', 'Experiments'], ['audit', 'Audit'], ['sources', 'Assumptions & sources']];
 const AGENT_NAMES: Record<string, string> = { consistency: 'Consistency checker', kit: 'Experiment writer', orch: 'Orchestrator', market: 'Market agent', customer: 'Customer agent', competition: 'Competition agent', finance: 'Finance agent', regulation: 'Regulation agent', usability: 'Ease-of-use agent', critic: 'Critic', offline: 'Offline mode', funnel: 'Decision funnel' };
@@ -25,7 +26,7 @@ export default function Report({ id }: { id: string }) {
   const explain = useMemo(() => (d?.result ? makeExplain(d.result) : () => null), [d]);
   return (
     <MathProvider explain={explain}>
-      <header className="topbar"><div className="container"><a className="brand" href="/"><i />ValidateUAE</a>
+      <header className="topbar"><div className="container"><a className="brand" href="/"><i />ValidateUAE</a><LogoutLink />
         {d?.status === 'done' && <nav className="tabs" role="tablist">{TABS.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => go(k)}>{l}</button>)}</nav>}
       </div></header>
       <main className="container page">
