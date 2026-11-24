@@ -1,0 +1,25 @@
+# Copies this repository to a Hugging Face Space on every push to main.
+# One-time setup: repository secret HF_TOKEN (a Hugging Face "write" token) and
+# repository variable HF_SPACE (for example: your-hf-username/validate-uae). See README.
+name: Deploy to Hugging Face Space
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: ${{ vars.HF_SPACE != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Push to the Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ vars.HF_SPACE }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then echo "Add the HF_TOKEN secret first (see README)"; exit 1; fi
+          git push --force "https://user:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}" HEAD:main

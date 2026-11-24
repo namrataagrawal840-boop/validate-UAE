@@ -46,7 +46,7 @@ def launch_options(inp, run, market_mult_by_price, focus_segment):
                 m = dict(arpu=pm, market=market_mult_by_price[pm])
                 if scale == "lean": m.update(fixed=.7, setup=.5, capacity=.6)
                 if focus: m.update(cac=.75, churn=.85)
-                s = run(_scaled(inp, **m), runs=25, focus_segment=focus_segment if focus else None, keep_paths=False, journeys=False)
+                s = run(_scaled(inp, **m), runs=P.RUNS_OPTION, focus_segment=focus_segment if focus else None, keep_paths=False, journeys=False)
                 name = f"{'Lean' if scale == 'lean' else 'Full'} launch, {plabel}{', beachhead segment first' if focus else ''}"
                 res.append(dict(name=name, price_mult=pm, scale=scale, focus=focus, p_payback=s["p_payback"], p_ruin=s["p_ruin"],
                                 npv_mean=float(np.mean(s["npv"])), cash_need_p90=float(np.quantile(s["peak_need"], .9)),
@@ -114,7 +114,7 @@ def kill_threshold(inp, run, limits, predicted_rate):
     """Find the conversion rate below which the payback chance falls under the founder's minimum."""
     mults = [.25, .45, .7, 1.0, 1.4, 2.0, 3.0]; ps = []
     for m in mults:
-        s = run(_scaled(inp, market=m), runs=25, keep_paths=False, journeys=False)
+        s = run(_scaled(inp, market=m), runs=P.RUNS_OPTION, keep_paths=False, journeys=False)
         ps.append(s["p_payback"])
     target = limits["min_payback"]; cross = None
     for i in range(1, len(mults)):

@@ -15,16 +15,16 @@ export function FanChart({ band, money, height = 300 }: { band: { p10: number[];
           <XAxis dataKey="t" tick={{ fontSize: 12, fill: '#586079' }} interval={5} tickLine={false} />
           <YAxis tickFormatter={short} tick={{ fontSize: 12, fill: '#586079' }} width={52} tickLine={false} axisLine={false} />
           <Tooltip formatter={(v: any, n: string) => (Array.isArray(v) ? `${fmt(v[0])} to ${fmt(v[1])}` : fmt(v))} labelStyle={{ fontWeight: 600 }} />
-          <Area dataKey="range" name="Bad case to good case" stroke="none" fill="#2348d6" fillOpacity={0.14} isAnimationActive={false} />
-          {money && <ReferenceLine y={0} stroke="#a86a00" strokeDasharray="5 4" />}
-          <Line dataKey="mid" name="Typical future" stroke="#2348d6" strokeWidth={2.5} dot={false} isAnimationActive={false} />
+          <Area dataKey="range" name="Bad case to good case" stroke="none" fill="#a9b1f2" fillOpacity={0.28} isAnimationActive={false} />
+          {money && <ReferenceLine y={0} stroke="#d9a35a" strokeDasharray="5 4" />}
+          <Line dataKey="mid" name="Typical future" stroke="#7682e6" strokeWidth={2.5} dot={false} isAnimationActive={false} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>
   );
 }
 
-export function CurveChart({ data, x, y, yFmt = (v: number) => pct(v), xFmt = (v: any) => String(v), height = 240, refLine: refY, color = '#2348d6' }: any) {
+export function CurveChart({ data, x, y, yFmt = (v: number) => pct(v), xFmt = (v: any) => String(v), height = 240, refLine: refY, color = '#7682e6' }: any) {
   return (
     <div style={{ width: '100%', height }}>
       <ResponsiveContainer>
@@ -33,7 +33,7 @@ export function CurveChart({ data, x, y, yFmt = (v: number) => pct(v), xFmt = (v
           <XAxis dataKey={x} tickFormatter={xFmt} tick={{ fontSize: 12, fill: '#586079' }} tickLine={false} />
           <YAxis tickFormatter={yFmt} tick={{ fontSize: 12, fill: '#586079' }} width={52} tickLine={false} axisLine={false} />
           <Tooltip formatter={(v: any) => yFmt(v)} labelFormatter={xFmt} />
-          {refY != null && <ReferenceLine y={refY} stroke="#a86a00" strokeDasharray="5 4" />}
+          {refY != null && <ReferenceLine y={refY} stroke="#d9a35a" strokeDasharray="5 4" />}
           <Line dataKey={y} stroke={color} strokeWidth={2.5} dot={false} isAnimationActive={false} />
         </LineChart>
       </ResponsiveContainer>
@@ -48,10 +48,10 @@ export function Tornado({ rows }: { rows: { name: string; variance_share: number
       <ResponsiveContainer>
         <BarChart data={data} layout="vertical" margin={{ top: 0, right: 40, bottom: 0, left: 0 }}>
           <XAxis type="number" hide domain={[0, 'dataMax']} />
-          <YAxis type="category" dataKey="name" width={190} tick={{ fontSize: 13, fill: '#121833' }} tickLine={false} axisLine={false} />
+          <YAxis type="category" dataKey="name" width={190} tick={{ fontSize: 13, fill: '#2b3047' }} tickLine={false} axisLine={false} />
           <Tooltip formatter={(v: any) => pct(v)} />
           <Bar dataKey="share" barSize={18} radius={[0, 4, 4, 0]} isAnimationActive={false} label={{ position: 'right', formatter: (v: any) => pct(v), fontSize: 12, fill: '#586079' }}>
-            {data.map((_, i) => <Cell key={i} fill={i === 0 ? '#2348d6' : '#9fb3f0'} />)}
+            {data.map((_, i) => <Cell key={i} fill={i === 0 ? '#7682e6' : '#c9cff7'} />)}
           </Bar>
         </BarChart>
       </ResponsiveContainer>
@@ -60,7 +60,7 @@ export function Tornado({ rows }: { rows: { name: string; variance_share: number
 }
 
 export function StateChart({ bands, height = 280 }: { bands: any; height?: number }) {
-  const keys = [['customers', 'Customers', '#2348d6'], ['left', 'Left', '#c43b3b'], ['said_no', 'Heard, said no', '#d9a441'], ['unaware', 'Not heard yet', '#c9cfdd']];
+  const keys = [['customers', 'Customers', '#7682e6'], ['left', 'Left', '#d4777c'], ['said_no', 'Heard, said no', '#f0c27a'], ['unaware', 'Not heard yet', '#c9cfdd']];
   const data = bands.customers.p50.map((_: any, i: number) => Object.fromEntries([['t', monthLabel(i)], ...keys.map(([k]) => [k, bands[k].p50[i]])]));
   return (
     <div style={{ width: '100%', height }}>

@@ -15,7 +15,7 @@ from .funnel import validation as V
 CREDIT = {"measured": 1.0, "benchmarked": .6, "web": .6, "founder": .3, "ai": .2, "critic": .2, "derived": .15, "prior": .1}
 LABEL = {"measured": "Measured", "benchmarked": "Benchmarked (your source)", "web": "Benchmarked (web source)", "founder": "Founder input",
          "ai": "AI estimate", "critic": "AI estimate, cut by the critic", "derived": "Derived by the model", "prior": "Category prior"}
-DEFAULT_SETTINGS = dict(runs=100, shocks=2, cycles=True, seasonality=True, seed=2027)
+DEFAULT_SETTINGS = dict(runs=P.RUNS_MAIN, shocks=2, cycles=True, seasonality=True, seed=2027)
 
 
 def tri(v):
@@ -288,7 +288,7 @@ def agent_population(m, it, p_adopt, arpu_i, seg, pot, arpu_base, capacity, seed
     from . import priors as PP
     idx = np.where(p_adopt > 0)[0]
     pool = pot["potential"] / max(p_adopt[idx].mean(), 1e-9)       # real people within reach
-    n = int(np.clip(pool * 40 / max(capacity, 1), 1500, min(5000, len(idx))))
+    n = int(np.clip(pool * 40 / max(capacity, 1), 1500, min(PP.MAX_AGENTS, len(idx))))
     rng = np.random.default_rng([seed, 5]); pick = rng.choice(idx, n, replace=False)
     labels = seg["labels"][pick]
     order = np.lexsort((m["digital"][pick], m["emirate"][pick], labels))

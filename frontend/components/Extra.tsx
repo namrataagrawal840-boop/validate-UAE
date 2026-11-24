@@ -9,15 +9,15 @@ import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, ReferenceLin
 export function ValidationCard({ r }: { r: any }) {
   const v = r.validation;
   return (
-    <div className="card">
+    <div className="card pastel">
       <div className="row between"><h2 style={{ margin: 0 }}>Validation score</h2><MathButton k="validation" /></div>
       <div className="row" style={{ alignItems: 'flex-end', gap: 18, margin: '8px 0 14px' }}>
         <div style={{ fontSize: 56, fontWeight: 800, lineHeight: 1 }}>{Math.round(v.score)}</div>
         <div><Badge tone={v.score >= 70 ? 'good' : v.score >= 50 ? 'warn' : 'bad'}>{v.verdict}</Badge><div className="small muted" style={{ marginTop: 4 }}>Likely range {Math.round(v.low)} to {Math.round(v.high)} out of 100</div></div>
       </div>
-      <div style={{ position: 'relative', height: 18, borderRadius: 9, background: 'linear-gradient(90deg,#c43b3b,#d9a441 45%,#19a7a0 70%,#2348d6)' }} role="img" aria-label={`Score ${Math.round(v.score)}, range ${Math.round(v.low)} to ${Math.round(v.high)}`}>
-        <div style={{ position: 'absolute', top: -4, bottom: -4, left: `${v.low}%`, width: `${v.high - v.low}%`, border: '2px solid #121833', borderRadius: 11, background: 'rgba(255,255,255,.35)' }} />
-        <div style={{ position: 'absolute', top: -8, height: 34, width: 4, borderRadius: 2, background: '#121833', left: `calc(${v.score}% - 2px)` }} />
+      <div style={{ position: 'relative', height: 18, borderRadius: 9, background: 'linear-gradient(90deg,#f6c1c1,#f8e2a8 45%,#b4e6d6 70%,#c3cbf7)' }} role="img" aria-label={`Score ${Math.round(v.score)}, range ${Math.round(v.low)} to ${Math.round(v.high)}`}>
+        <div style={{ position: 'absolute', top: -4, bottom: -4, left: `${v.low}%`, width: `${v.high - v.low}%`, border: '2px solid #2b3047', borderRadius: 11, background: 'rgba(255,255,255,.35)' }} />
+        <div style={{ position: 'absolute', top: -8, height: 34, width: 4, borderRadius: 2, background: '#2b3047', left: `calc(${v.score}% - 2px)` }} />
       </div>
       <div className="row between tiny muted" style={{ marginTop: 6 }}><span>0 weak</span><span>50</span><span>100 strong</span></div>
       <p className="small muted" style={{ marginTop: 10 }}>A weighted average of the checks (money and customers count most). The range is wider when evidence is thin, when the critic flags weak claims, and when payback is close to a coin toss. The decision above uses your limits; this score summarises overall strength.</p>
@@ -36,7 +36,7 @@ export function IdeaCard({ r }: { r: any }) {
       <div className="meta">{cells.map(([k, v]) => <div key={k}><b>{k}</b>{v || '–'}</div>)}</div>
       <div className="grid g2">
         <div><h3>Key assumptions to test</h3><ol style={{ margin: 0, paddingLeft: 20 }}>{i.assumptions.map((a: string, j: number) => <li key={j} className="small">{a}</li>)}</ol></div>
-        {i.rubric?.length ? <div><h3>AI judge rubric</h3>{i.rubric.map((x: any, j: number) => <HBar key={j} name={<span title={x.reason}>{x.criterion}</span>} frac={x.score / 5} value={`${x.score}/5`} color={x.score >= 4 ? '#0c8a64' : x.score >= 3 ? '#d9a441' : '#c43b3b'} />)}<p className="tiny muted">Hover a criterion for the reason. A fixed rubric reduces flattery.</p></div> : <div><h3>AI judge rubric</h3><p className="small muted">Run with AI agents to score problem severity, solution fit, differentiation, UAE feasibility and timing.</p></div>}
+        {i.rubric?.length ? <div><h3>AI judge rubric</h3>{i.rubric.map((x: any, j: number) => <HBar key={j} name={<span title={x.reason}>{x.criterion}</span>} frac={x.score / 5} value={`${x.score}/5`} color={x.score >= 4 ? '#3f9c7a' : x.score >= 3 ? '#f0c27a' : '#d4777c'} />)}<p className="tiny muted">Hover a criterion for the reason. A fixed rubric reduces flattery.</p></div> : <div><h3>AI judge rubric</h3><p className="small muted">Run with AI agents to score problem severity, solution fit, differentiation, UAE feasibility and timing.</p></div>}
       </div>
       {i.applied?.length ? <p className="callout" style={{ marginTop: 12 }}>Changes applied to this plan: {i.applied.map((a: any) => a.name).join('; ')}.</p> : null}
     </div>
@@ -58,9 +58,9 @@ export function MarketSizing({ r }: { r: any }) {
   return (
     <div style={{ marginTop: 14 }}>
       <div className="row between"><h3 style={{ margin: 0 }}>TAM, SAM and SOM: top-down vs bottom-up</h3><MathButton k="sizing" /></div>
-      <HBar name="TAM: category spend (simulated market)" frac={s.tam_synthetic / max} value={aed(s.tam_synthetic) + '/yr'} color="#9fb3f0" />
-      {s.tam_ai ? <HBar name="TAM: AI research (top-down)" frac={s.tam_ai / max} value={aed(s.tam_ai) + '/yr'} color="#9fb3f0" /> : null}
-      <HBar name="SAM: spend within your reach" frac={s.sam / max} value={aed(s.sam) + '/yr'} color="#6f8ee6" />
+      <HBar name="TAM: category spend (simulated market)" frac={s.tam_synthetic / max} value={aed(s.tam_synthetic) + '/yr'} color="#c9cff7" />
+      {s.tam_ai ? <HBar name="TAM: AI research (top-down)" frac={s.tam_ai / max} value={aed(s.tam_ai) + '/yr'} color="#c9cff7" /> : null}
+      <HBar name="SAM: spend within your reach" frac={s.sam / max} value={aed(s.sam) + '/yr'} color="#aab3f2" />
       {s.som_top_down ? <HBar name="SOM: AI research (top-down)" frac={s.som_top_down / max} value={aed(s.som_top_down) + '/yr'} /> : null}
       <HBar name="SOM: agent simulation (bottom-up)" frac={s.som_bottom_up / max} value={aed(s.som_bottom_up) + '/yr'} />
       <p className="small" style={{ marginTop: 6 }}>{s.flag ? <Badge tone="bad">Disagree by {s.disagreement.toFixed(1)}×</Badge> : s.disagreement ? <Badge tone="good">Agree within {s.disagreement.toFixed(1)}×</Badge> : null} {s.note}</p>
@@ -85,10 +85,10 @@ export function CustomerValue({ d }: { d: any }) {
       </div>
       <div className="grid g2">
         <div className="card"><h2>Willingness to pay vs your price</h2><p className="small muted">Simulated buyers in your area from the blinded market. Bars at or above your price are dark.</p>
-          <div style={{ width: '100%', height: 240 }}><ResponsiveContainer><BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}><CartesianGrid stroke="#e9ecf3" vertical={false} /><XAxis dataKey="x" tick={{ fontSize: 12, fill: '#586079' }} tickFormatter={(x: any) => `${x}`} /><YAxis hide /><Tooltip formatter={(c: any) => [num(c), 'Simulated buyers']} labelFormatter={(x: any) => `About AED ${x} a month`} /><Bar dataKey="c" isAnimationActive={false}>{data.map((x: any, i: number) => <Cell key={i} fill={x.above ? '#2348d6' : '#c9d4f5'} />)}</Bar><ReferenceLine x={data.find((x: any) => x.above)?.x} stroke="#a86a00" strokeDasharray="4 4" /></BarChart></ResponsiveContainer></div>
+          <div style={{ width: '100%', height: 240 }}><ResponsiveContainer><BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}><CartesianGrid stroke="#e9ecf3" vertical={false} /><XAxis dataKey="x" tick={{ fontSize: 12, fill: '#586079' }} tickFormatter={(x: any) => `${x}`} /><YAxis hide /><Tooltip formatter={(c: any) => [num(c), 'Simulated buyers']} labelFormatter={(x: any) => `About AED ${x} a month`} /><Bar dataKey="c" isAnimationActive={false}>{data.map((x: any, i: number) => <Cell key={i} fill={x.above ? '#7682e6' : '#e2e6fb'} />)}</Bar><ReferenceLine x={data.find((x: any) => x.above)?.x} stroke="#d9a35a" strokeDasharray="4 4" /></BarChart></ResponsiveContainer></div>
           <p className="tiny muted">AED per month. Run the Van Westendorp survey on the Experiments tab to replace this with real answers.</p></div>
         <div className="card"><h2>Jobs to be done</h2>{v.jtbd.length ? <ul style={{ paddingLeft: 18 }}>{v.jtbd.map((j: any, i: number) => <li key={i}><Badge tone="neutral">{j.type}</Badge> {j.job}</li>)}</ul> : <p className="muted small">Run with AI agents to describe the customer's functional, emotional and social jobs.</p>}
-          <h3>Pains found</h3>{v.pains.length ? v.pains.map((p: any, i: number) => <HBar key={i} name={<>{p.pain} <Source url={p.url} /></>} frac={p.intensity / 100} value={Math.round(p.intensity)} color={p.intensity >= 65 ? '#c43b3b' : '#d9a441'} />) : <p className="muted small">Not researched yet.</p>}</div>
+          <h3>Pains found</h3>{v.pains.length ? v.pains.map((p: any, i: number) => <HBar key={i} name={<>{p.pain} <Source url={p.url} /></>} frac={p.intensity / 100} value={Math.round(p.intensity)} color={p.intensity >= 65 ? '#d4777c' : '#f0c27a'} />) : <p className="muted small">Not researched yet.</p>}</div>
       </div>
       <div className="card"><h2>Value Proposition Canvas</h2>{has ? (
         <div className="grid g2">
@@ -121,10 +121,10 @@ export function Improve({ d, setD }: { d: any; setD: (x: any) => void }) {
       {r.idea.applied?.length ? <div className="card"><h2>Applied to your plan</h2><div className="row">{r.idea.applied.map((a: any) => <button key={a.id} disabled={!!busy} onClick={() => act(() => api.removeVariant(d.id, a.id), a.id)}>{busy === a.id ? 'Removing…' : `${a.name}: remove`}</button>)}</div></div> : null}
       <div className="card">
         <div className="row between"><h2 style={{ margin: 0 }}>Tested changes, ranked</h2><MathButton k="improve" /></div>
-        <p className="small muted">Current plan: {pct(im.base.p_payback)} payback chance, expected value {aed(im.base.npv_mean)} (each tested with 25 replays).</p>
+        <p className="small muted">Current plan: {pct(im.base.p_payback)} payback chance, expected value {aed(im.base.npv_mean)} (each tested with the same set of replays).</p>
         <div className="scroll"><table><thead><tr><th>Change</th><th>What it does</th><th className="num">Payback chance</th><th className="num">Expected value</th><th></th></tr></thead><tbody>
           {im.variants.map((v: any) => <tr key={v.id}><td><b>{v.name}</b> {v.ai && <Badge tone="info">AI pivot</Badge>} {v.combo && <Badge tone="good">Recombined</Badge>}<div className="tiny muted">{Object.entries(v.changes).map(([k, x]: any) => `${k} ${x > 0 ? '+' : ''}${Math.round(x)}${['var_pct', 'satisfaction'].includes(k) ? ' pts' : '%'}`).join(', ')}</div></td>
-            <td className="small">{v.what}</td><td className="num">{pct(v.p_payback)} <span className="small" style={{ color: v.d_payback > 0 ? '#0c8a64' : v.d_payback < 0 ? '#c43b3b' : undefined }}>({v.d_payback >= 0 ? '+' : '−'}{Math.abs(Math.round(v.d_payback * 100))})</span></td>
+            <td className="small">{v.what}</td><td className="num">{pct(v.p_payback)} <span className="small" style={{ color: v.d_payback > 0 ? '#3f9c7a' : v.d_payback < 0 ? '#d4777c' : undefined }}>({v.d_payback >= 0 ? '+' : '−'}{Math.abs(Math.round(v.d_payback * 100))})</span></td>
             <td className="num">{aed(v.npv_mean)}</td><td><button disabled={!!busy} onClick={() => act(() => api.applyVariant(d.id, v.id), v.id)}>{busy === v.id ? 'Applying…' : 'Apply'}</button></td></tr>)}
         </tbody></table></div>
         <p className="small muted">Applying a change re-runs the whole funnel with it. Remove it any time.</p>
@@ -166,10 +166,10 @@ export function ExtraResults({ r }: { r: any }) {
         <div className="grid g4" style={{ margin: '10px 0' }}><Stat label="Lowest acceptable" value={aed(e.vw.pmc)} /><Stat label="Optimal price" value={aed(e.vw.opp)} /><Stat label="Indifference price" value={aed(e.vw.ipp)} /><Stat label="Highest acceptable" value={aed(e.vw.pme)} /></div>
         <p className="small">{e.vw.accept_k} of {e.vw.accept_n} respondents find your price of {aed(r.assumptions.price.likely)} acceptable.</p>
         <div style={{ width: '100%', height: 220 }}><ResponsiveContainer><LineChart data={e.vw.curves.price.map((p: number, i: number) => ({ p, tc: e.vw.curves.too_cheap[i], c: e.vw.curves.cheap[i], x: e.vw.curves.expensive[i], te: e.vw.curves.too_expensive[i] }))}><CartesianGrid stroke="#e9ecf3" vertical={false} /><XAxis dataKey="p" tick={{ fontSize: 12 }} /><YAxis tickFormatter={(v: any) => pct(v)} tick={{ fontSize: 12 }} width={44} /><Tooltip formatter={(v: any) => pct(v)} labelFormatter={(p: any) => `AED ${p}`} />
-          <Line dataKey="tc" name="Too cheap" stroke="#9fb3f0" dot={false} isAnimationActive={false} /><Line dataKey="c" name="Cheap" stroke="#2348d6" dot={false} isAnimationActive={false} /><Line dataKey="x" name="Expensive" stroke="#d9a441" dot={false} isAnimationActive={false} /><Line dataKey="te" name="Too expensive" stroke="#c43b3b" dot={false} isAnimationActive={false} /></LineChart></ResponsiveContainer></div></div>}
+          <Line dataKey="tc" name="Too cheap" stroke="#c9cff7" dot={false} isAnimationActive={false} /><Line dataKey="c" name="Cheap" stroke="#7682e6" dot={false} isAnimationActive={false} /><Line dataKey="x" name="Expensive" stroke="#f0c27a" dot={false} isAnimationActive={false} /><Line dataKey="te" name="Too expensive" stroke="#d4777c" dot={false} isAnimationActive={false} /></LineChart></ResponsiveContainer></div></div>}
       {e.sales && <div className="card"><h2>Sales forecast from your real data</h2><p className="small muted">Holt's exponential smoothing (level and trend), with an 80% range that widens over time.</p>
         <div style={{ width: '100%', height: 240 }}><ResponsiveContainer><LineChart data={[...e.sales.history.map((v: number, i: number) => ({ t: `M${i + 1}`, actual: v })), ...e.sales.forecast.map((v: number, i: number) => ({ t: `M${e.sales.history.length + i + 1}`, f: v, lo: e.sales.low[i], hi: e.sales.high[i] }))]}><CartesianGrid stroke="#e9ecf3" vertical={false} /><XAxis dataKey="t" tick={{ fontSize: 12 }} /><YAxis tick={{ fontSize: 12 }} width={56} tickFormatter={(v: any) => num(v)} /><Tooltip formatter={(v: any) => aed(v)} />
-          <Line dataKey="actual" name="Actual" stroke="#121833" strokeWidth={2.5} isAnimationActive={false} /><Line dataKey="f" name="Forecast" stroke="#2348d6" strokeWidth={2.5} strokeDasharray="5 4" dot={false} isAnimationActive={false} /><Line dataKey="lo" name="Low" stroke="#9fb3f0" dot={false} isAnimationActive={false} /><Line dataKey="hi" name="High" stroke="#9fb3f0" dot={false} isAnimationActive={false} /></LineChart></ResponsiveContainer></div>
+          <Line dataKey="actual" name="Actual" stroke="#2b3047" strokeWidth={2.5} isAnimationActive={false} /><Line dataKey="f" name="Forecast" stroke="#7682e6" strokeWidth={2.5} strokeDasharray="5 4" dot={false} isAnimationActive={false} /><Line dataKey="lo" name="Low" stroke="#c9cff7" dot={false} isAnimationActive={false} /><Line dataKey="hi" name="High" stroke="#c9cff7" dot={false} isAnimationActive={false} /></LineChart></ResponsiveContainer></div>
         <p className="small">Trend: {e.sales.trend_per_month >= 0 ? '+' : ''}{aed(e.sales.trend_per_month)} a month.</p></div>}
       {(e.nps || e.usability) && <div className="card"><h2>Satisfaction and usability</h2>
         {e.nps && <p>NPS <b>{Math.round(e.nps.nps)}</b> from {e.nps.n} pilot customers; it now sets satisfaction in the simulation to <b>{pct(e.nps.satisfaction)}</b>.</p>}

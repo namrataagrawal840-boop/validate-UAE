@@ -14,6 +14,7 @@ COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./backend/
 COPY --from=web /web/out ./frontend/out
+RUN mkdir -p /app/data && chmod 777 /app/data
 ENV STATIC_DIR=/app/frontend/out DB_PATH=/app/data/validate.db PORT=8000
 WORKDIR /app/backend
 EXPOSE 8000

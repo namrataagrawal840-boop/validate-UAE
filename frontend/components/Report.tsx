@@ -81,15 +81,15 @@ function Decision({ d, go }: { d: any; go: (t: string) => void }) {
         <Stat label="Expected value (NPV)" value={aed(f.npv_mean)} sub={`Bad case ${aed(f.npv_p10)} · good case ${aed(f.npv_p90)}`} math="npv" />
         <Stat label="Evidence strength" value={pct(r.evidence.strength)} sub="Share of the inputs backed by sources or measurements" math="evidence" />
       </div>
-      <div className="grid g2"><ValidationCard r={r} /><div className="card"><h2>Market size check</h2><MarketSizing r={r} /></div></div>
+      <div className="grid g2"><ValidationCard r={r} /><div className="card pastel" style={{ background: 'var(--sky)', borderColor: 'var(--sky-b)' }}><h2>Market size check</h2><MarketSizing r={r} /></div></div>
       <IdeaCard r={r} />
       {dec.code === 'pivot' || (dec.code === 'test' && dec.best) ? (
-        <div className="card"><h2>The launch plan that works best</h2>
+        <div className="card pastel" style={{ background: 'var(--mint)', borderColor: 'var(--mint-b)' }}><h2>The launch plan that works best</h2>
           <p><b>{dec.best.name}.</b> Payback chance {pct(f.p_payback)} → <b>{pct(dec.best.p_payback)}</b>; chance of exceeding budget {pct(f.p_ruin)} → <b>{pct(dec.best.p_ruin)}</b>; expected value {aed(f.npv_mean)} → <b>{aed(dec.best.npv_mean)}</b>.</p>
           <p className="small muted">{dec.feasible} of 12 tested launch plans meet your limits. <button className="link" onClick={() => go('funnel')}>See all plans</button></p>
         </div>) : null}
       <div className="grid g2">
-        <div className="card"><h2>Launch plan</h2>
+        <div className="card tint"><h2>Launch plan</h2>
           <table><tbody>
             <tr><td>Start with</td><td><b>{seg?.name}</b> <span className="small muted">({pct(seg?.value_share)} of expected revenue)</span></td></tr>
             <tr><td>Spend per customer</td><td>{aed(r.unit.arpu)} a month</td></tr>
@@ -99,7 +99,7 @@ function Decision({ d, go }: { d: any; go: (t: string) => void }) {
             <tr><td>Best marketing channels</td><td>{mix.allocation.filter((a: any) => a.customers > .5).slice(0, 3).map((a: any) => a.channel).join(', ')}</td></tr>
           </tbody></table>
         </div>
-        <div className="card"><h2>Stop rules (kill criteria)</h2>
+        <div className="card tint"><h2>Stop rules (kill criteria)</h2>
           <ul style={{ margin: 0, paddingLeft: 20 }}>{r.kill_criteria.map((x: string, i: number) => <li key={i} style={{ marginBottom: 6 }}>{x}</li>)}</ul>
           <MathButton k="kill" />
         </div>
@@ -177,7 +177,7 @@ function Funnel({ d, go }: { d: any; go: (t: string) => void }) {
       <StageCard n={3} q="Is anything unusual in the plan?" family="Anomaly detection" algo="Isolation Forest vs 3,000 comparable plans" check={['good', 'Pass', 'Reference plans from category ranges.']} passes="Optimism flags (lower evidence strength)" math="anomaly">
         <p>{S.anomaly.outlier ? <Badge tone="bad">Unusual plan</Badge> : <Badge tone="good">Looks like a normal plan</Badge>} <span className="small">Your plan looks more typical than {pct(1 - S.anomaly.more_normal_share)} of {num(S.anomaly.reference_size)} comparable plans. {S.anomaly.optimistic_count} assumption(s) flagged as optimistic.</span></p>
         <div className="scroll"><table><thead><tr><th>Assumption</th><th className="num">Yours</th><th className="num">Typical</th><th>Percentile among comparable plans</th></tr></thead><tbody>
-          {S.anomaly.per_assumption.map((a: any) => <tr key={a.key}><td>{a.name} {a.optimistic ? <Badge tone="bad">Optimistic</Badge> : a.unusual ? <Badge tone="warn">Unusual</Badge> : null}</td><td className="num">{num(a.value, a.value < 100 ? 1 : 0)}</td><td className="num">{num(a.typical, a.typical < 100 ? 1 : 0)}</td><td style={{ minWidth: 160 }}><div className="bar" style={{ position: 'relative' }}><i style={{ width: `${a.percentile * 100}%`, background: a.unusual ? '#c43b3b' : '#2348d6' }} /></div><span className="tiny">{pct(a.percentile)}</span></td></tr>)}
+          {S.anomaly.per_assumption.map((a: any) => <tr key={a.key}><td>{a.name} {a.optimistic ? <Badge tone="bad">Optimistic</Badge> : a.unusual ? <Badge tone="warn">Unusual</Badge> : null}</td><td className="num">{num(a.value, a.value < 100 ? 1 : 0)}</td><td className="num">{num(a.typical, a.typical < 100 ? 1 : 0)}</td><td style={{ minWidth: 160 }}><div className="bar" style={{ position: 'relative' }}><i style={{ width: `${a.percentile * 100}%`, background: a.unusual ? '#d4777c' : '#7682e6' }} /></div><span className="tiny">{pct(a.percentile)}</span></td></tr>)}
         </tbody></table></div>
       </StageCard>
 
@@ -269,7 +269,7 @@ function Lab({ d, setD }: { d: any; setD: (x: any) => void }) {
         </div>
         <div className="stack" style={{ gridColumn: 'span 2', opacity: busy ? .6 : 1 }}>
           <div className="grid g4"><Stat label="Payback chance" value={pct(f.p_payback)} sub={`Need ${pct(r.limits.min_payback)}`} /><Stat label="Exceeds budget" value={pct(f.p_ruin)} sub={`Limit ${pct(r.limits.max_ruin)}`} /><Stat label="Expected NPV" value={aed(f.npv_mean)} /><Stat label="Typical payback" value={f.payback_median ? `Month ${Math.round(f.payback_median)}` : 'Beyond horizon'} /></div>
-          <div className="card"><h3>Cash over time (AED)</h3><div className="legend" style={{ marginBottom: 6 }}><span><i style={{ background: '#2348d6' }} />Typical future</span><span><i style={{ background: '#2348d624' }} />Bad to good case</span><span><i style={{ background: '#a86a00' }} />Zero: paid back</span></div><FanChart band={f.bands.cash} money /></div>
+          <div className="card"><h3>Cash over time (AED)</h3><div className="legend" style={{ marginBottom: 6 }}><span><i style={{ background: '#7682e6' }} />Typical future</span><span><i style={{ background: '#7682e624' }} />Bad to good case</span><span><i style={{ background: '#d9a35a' }} />Zero: paid back</span></div><FanChart band={f.bands.cash} money /></div>
           <div className="card"><h3>Active customers</h3><FanChart band={f.bands.customers} height={220} /></div>
         </div>
       </div>
@@ -396,7 +396,7 @@ function MarketFunnel({ b }: { b: any }) {
       {steps.map(([n, v]: any, i) => { const prev = i ? (steps[i - 1][1] as number) : v; return (
         <div key={n} style={{ margin: '6px 0' }}>
           <div className="row between small"><b>{n}</b><span className="num">{num(v)}{i > 0 && <span className="muted"> · {pct(v / Math.max(prev, 1), v / Math.max(prev, 1) < .1 ? 1 : 0)} of previous step</span>}</span></div>
-          <div className="bar" style={{ height: 14 }}><i style={{ width: `${Math.max(1.5, Math.sqrt(v / Math.max(steps[0][1] as number, 1)) * 100)}%`, background: ['#9fb3f0', '#6f8ee6', '#3f66dd', '#2348d6'][i] }} /></div>
+          <div className="bar" style={{ height: 14 }}><i style={{ width: `${Math.max(1.5, Math.sqrt(v / Math.max(steps[0][1] as number, 1)) * 100)}%`, background: ['#c9cff7', '#aab3f2', '#8f9aee', '#7682e6'][i] }} /></div>
         </div>); })}
       <p className="tiny muted">Bar lengths use a square-root scale so small steps stay visible.</p>
     </div>

@@ -33,7 +33,7 @@ export default function Home() {
           <div className="stack">
             <h1>Test a business idea against the UAE market before you spend on it</h1>
             <p className="lead">Start with the decision: should you launch, launch with changes, test first, or stop? AI agents research your idea on the web with sources. Ten algorithm stages turn the research into one answer. Then an agent-based simulation replays the market customer by customer, with word of mouth, a reacting competitor and random shocks, and checks the result against your cash and your appetite for risk.</p>
-            <div className="card"><h3>How it decides</h3>
+            <div className="card pastel"><h3>How it decides</h3>
               <ol className="small" style={{ margin: 0, paddingLeft: 20 }}>
                 <li>Describe the market and group buyers (statistics, Gaussian mixture)</li>
                 <li>Flag unrealistic assumptions (Isolation Forest)</li>

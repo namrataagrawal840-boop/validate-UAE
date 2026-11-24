@@ -163,7 +163,7 @@ def rank_variants(variants, inp, run, price_mult_market):
         i2 = change_inp(inp, ch)
         if "price" in ch:  # price changes who buys: use the choice model's response
             i2["market"] = tuple(x * price_mult_market(1 + ch["price"] / 100) for x in i2["market"])
-        s = run(i2, runs=25, keep_paths=False, journeys=False)
+        s = run(i2, runs=P.RUNS_OPTION, keep_paths=False, journeys=False)
         return s["p_payback"], float(np.mean(s["npv"])), s["p_ruin"]
     bp, bn, br = go({})
     rows = []

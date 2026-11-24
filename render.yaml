@@ -10,5 +10,7 @@ services:
         sync: false          # Render asks you to paste it; it is never stored in the code
       - key: ANTHROPIC_MODEL
         value: claude-sonnet-5-5
+      - key: SIM_MODE
+        value: fast          # the free plan has little CPU
       - key: WEB_SEARCH_TOOL
         value: web_search_20250305

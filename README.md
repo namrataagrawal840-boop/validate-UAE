@@ -1,3 +1,14 @@
+---
+title: ValidateUAE
+emoji: 🌿
+colorFrom: purple
+colorTo: green
+sdk: docker
+app_port: 8000
+pinned: false
+short_description: Validate a business idea for the UAE before you spend on it
+---
+
 # ValidateUAE
 
 Test a business idea against the UAE market before you spend money on it.
@@ -57,19 +68,33 @@ The site works without a key (it uses category priors), but the AI research agen
 3. Open **API keys** → **Create key**, name it `validate-uae`, and copy it. It is shown only once.
 4. Never paste the key into the code or commit it. Put it in your hosting provider's secret settings (below) or in a local `.env` file, which is git-ignored.
 
-## Put it online (Render, one service)
+## Put it online with a public link (Hugging Face Spaces, free)
 
-1. Sign in at **https://render.com** with your GitHub account.
-2. Click **New → Blueprint**, pick this repository, and confirm. Render reads `render.yaml`.
-3. When asked for `ANTHROPIC_API_KEY`, paste your key.
-4. Wait for the build (a few minutes). Your public URL looks like `https://validate-uae.onrender.com`.
+Hugging Face Spaces runs this Docker app for free on 2 CPUs, enough for the agent-based simulation. This repository is set up so that **every push to GitHub updates the website automatically**.
 
-On the free plan the service sleeps when idle (the first visit then takes a while), runs on a small share of a CPU (the simulation becomes slow), and saved analyses can be lost when it restarts. For a smooth demo, use a paid instance or the Hugging Face option below, and open the site a few minutes before presenting.
+**One-time setup (about 10 minutes):**
 
-### Free alternative with more CPU: Hugging Face Spaces
-1. At https://huggingface.co/new-space choose **Docker** as the SDK.
-2. Push this repository to the Space (or link it), and add `ANTHROPIC_API_KEY` under **Settings → Variables and secrets** as a secret.
-3. Add a variable `PORT` with the value `7860`. The container listens on whatever `PORT` says.
+1. **Create a free account** at https://huggingface.co/join.
+2. **Create the Space.** Go to https://huggingface.co/new-space:
+   - Space name: `validate-uae`
+   - SDK: **Docker** → **Blank**
+   - Hardware: **CPU basic (free)**
+   - Visibility: **Public** (anyone with the link can open it)
+
+   Click **Create Space**.
+3. **Add your Anthropic API key to the Space.** In the Space, go to **Settings → Variables and secrets → New secret**, with name `ANTHROPIC_API_KEY` and your key as the value. Without a key the site still works, using category priors.
+4. **Create a Hugging Face access token.** Go to https://huggingface.co/settings/tokens → **Create new token** → type **Write** → copy it.
+5. **Connect GitHub to the Space.** In this GitHub repository, go to **Settings → Secrets and variables → Actions**:
+   - **New repository secret:** name `HF_TOKEN`, value = the token from step 4
+   - **Variables tab → New repository variable:** name `HF_SPACE`, value = `your-hf-username/validate-uae`
+6. **Deploy.** Go to the **Actions** tab → **Deploy to Hugging Face Space** → **Run workflow**. Hugging Face builds the app in about 5 to 10 minutes.
+
+Your public link is `https://huggingface.co/spaces/your-hf-username/validate-uae`. There is also a direct, full-screen address: `https://your-hf-username-validate-uae.hf.space`.
+
+After this, every push to `main` redeploys automatically. A free Space sleeps after a while without visitors; the first visit then takes a minute to wake it up, so open it a few minutes before a demo.
+
+### Alternative: Render
+On https://render.com, choose **New → Blueprint**, pick this repository and paste `ANTHROPIC_API_KEY`. Render's free plan has very little CPU, so `render.yaml` sets `SIM_MODE=fast` (fewer simulated agents and replays, same method). Expect slower analyses than on Hugging Face.
 
 ## Run it on your computer
 

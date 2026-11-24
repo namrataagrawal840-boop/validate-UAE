@@ -1,3 +1,4 @@
+import os
 """Category-level starting knowledge for the UAE.
 
 Everything in this file is a *prior*: a starting belief used before any
@@ -98,3 +99,9 @@ CHOICE_MODEL = dict(  # starting coefficients of the adoption model (no labels y
     b_fit=1.0,      # channel fit centred at 0.5
     b_comp=1.0,     # competitive position (-1..1)
 )
+
+# Small servers (for example Render's free plan) can set SIM_MODE=fast: fewer agents and replays, same method.
+SIM_FAST = os.getenv("SIM_MODE", "").lower() == "fast"
+RUNS_MAIN = 60 if SIM_FAST else 100
+RUNS_OPTION = 15 if SIM_FAST else 25
+MAX_AGENTS = 3000 if SIM_FAST else 5000
