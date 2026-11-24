@@ -12,8 +12,9 @@ from .funnel.abm import simulate_abm, friend_network
 from .funnel import decide as D
 from .funnel import validation as V
 from .funnel import competition as CP
+from . import evidence as EVD
 
-CREDIT = {"measured": 1.0, "benchmarked": .6, "web": .6, "founder": .3, "ai": .2, "critic": .2, "derived": .15, "prior": .1}
+CREDIT = EVD.LABEL_CREDIT  # kept for compatibility
 LABEL = {"measured": "Measured", "benchmarked": "Benchmarked (your source)", "web": "Benchmarked (web source)", "founder": "Founder input",
          "ai": "AI estimate", "critic": "AI estimate, cut by the critic", "derived": "Derived by the model", "prior": "Category prior"}
 DEFAULT_SETTINGS = dict(runs=P.RUNS_MAIN, shocks=2, cycles=True, seasonality=True, seed=2027)
@@ -60,6 +61,8 @@ def build_assumptions(state):
     if up > 1.001 and A["cac"]["label"] in ("ai", "web", "prior"):
         for f in ("min", "likely", "max"): A["cac"][f] *= up
         A["cac"]["label"] = "critic"; A["cac"]["source"] += f"; raised {up - 1:.0%} by the critic"
+    for k, o in EVD.value_overrides(state.get("ledger") or []).items():  # numbers backed by real evidence in the ledger
+        if k in A: A[k] = o
     for k, o in (state.get("overrides") or {}).items():
         if k in A: A[k] = {**A[k], **o}
     for v in state.get("applied") or []:
@@ -185,12 +188,18 @@ def compute(state, light=False):
     bep_customers = A["fixed"]["likely"] / max(contrib, 1e-9)
     ltv = contrib / max(A["churn"]["likely"] / 100 * (1.5 - sat), 1e-4)
 
-    # Evidence strength (credit by label) minus optimism flags
+    # Evidence confidence: real evidence only (ledger records and measured or sourced inputs). AI estimates and the
+    # simulation add nothing, so running the AI agents can never raise it. Optimistic outliers lower it.
     lbl = {**{k: A[k]["label"] for k in ["var_pct", "fixed", "setup", "cac", "churn", "capacity"]}, "price": A["price"]["label"], "market": market_label}
-    strength = float(np.clip(np.mean([CREDIT[v] for v in lbl.values()]) - .05 * anom["optimistic_count"], 0, 1))
+    ledger = state.get("ledger") or []
+    # a number taken from a ledger record earns exactly that record's weight, not the label's full credit
+    areas = EVD.area_confidence(ledger, {k: ("ledger" if A.get(k, {}).get("evidence_id") else v) for k, v in lbl.items()})
+    strength = EVD.overall(areas, anom["optimistic_count"])
     mix = {}
     for v in lbl.values(): mix[v] = mix.get(v, 0) + 1
-    evidence = dict(strength=strength, labels=lbl, mix=mix)
+    real = [r for r in ledger if EVD.is_real(r)]
+    evidence = dict(strength=strength, labels=lbl, mix=mix, areas=areas, records=len(ledger), real_records=len(real),
+                    ai_records=len(ledger) - len(real))
 
     result = dict(intake=it, settings=st, limits=limits, warnings=warnings + notes, assumptions={k: {**v, "label_text": LABEL[v["label"]], "name": P.NAMES[k]} for k, v in A.items()},
                   choice_model=coefs, comp_position=comp_pos)
@@ -280,6 +289,7 @@ def compute(state, light=False):
         stress=dict(p_payback=stress["p_payback"], p_ruin=stress["p_ruin"]),
         concentration=dict(top_segment=segs[0]["name"] if segs else None, top_share=segs[0]["value_share"] if segs else None),
         optimism_flags=anom["optimistic_count"], neutral_brief=bool((ag.get("orch") or {}).get("neutral_brief")))
+    result["evidence"]["gaps"] = EVD.gaps(areas, lk["rows"])
     result["kill_criteria"] = kill_criteria(result, limits)
     result["next_steps"] = next_steps(result)
     return result

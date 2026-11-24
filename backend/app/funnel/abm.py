@@ -83,7 +83,7 @@ def simulate_abm(inp, pop, *, runs=100, seed=2027, horizon=36, shocks=2, cycles=
         cash = cash - .5 * d["fixed"]; npv = npv - .5 * d["fixed"]; low = np.minimum(low, cash)
     regime = np.zeros(R, dtype=int); rem = np.zeros((R, len(SHOCK_KEYS))); comp_left = np.zeros(R); comp_count = np.zeros(R)
     payback = np.full(R, np.inf); op_be = np.full(R, np.inf); shock_count = np.zeros(len(SHOCK_KEYS), dtype=int)
-    paths = {k: np.zeros((R, T)) for k in ["cash", "customers", "revenue", "profit", "unaware", "said_no", "left"]}
+    paths = {k: np.zeros((R, T)) for k in ["cash", "customers", "revenue", "profit", "unaware", "said_no", "left", "new", "costs", "marketing"]}
     src = dict(marketing=np.zeros(R), word_of_mouth=np.zeros(R), turned_away=np.zeros(R), unhappy_left=np.zeros(R), left=np.zeros(R))
     hist0 = np.zeros((T, N), dtype=np.int8) if journeys else None
     how0 = np.zeros(N, dtype=np.int8); when0 = np.full(N, -1); left_unhappy0 = np.zeros(N, dtype=bool)
@@ -159,6 +159,7 @@ def simulate_abm(inp, pop, *, runs=100, seed=2027, horizon=36, shocks=2, cycles=
         payback = np.where(np.isinf(payback) & (cash >= 0), t + 1, payback)
         op_be = np.where(np.isinf(op_be) & (profit > 0) & (t > 0), t + 1, op_be)
         paths["cash"][:, t] = cash; paths["customers"][:, t] = cust.sum(1) * scale; paths["revenue"][:, t] = revenue; paths["profit"][:, t] = profit
+        paths["new"][:, t] = n_new * scale; paths["marketing"][:, t] = n_new * scale * d["cac"]; paths["costs"][:, t] = revenue - profit
         paths["unaware"][:, t] = (state == 0).sum(1) * scale; paths["said_no"][:, t] = (state == 1).sum(1) * scale; paths["left"][:, t] = (state == 3).sum(1) * scale
         if journeys:
             hist0[t] = state[0]
