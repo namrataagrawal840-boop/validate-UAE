@@ -61,3 +61,19 @@ def test_signin_key_and_draft_survive_restart(monkeypatch):
     assert store.read_token(t) == u
     assert store.load_draft(u)["step"] == 2
     store.delete_draft(u); assert store.load_draft(u) is None
+
+
+def test_every_neon_url_form_uses_the_installed_driver():
+    base = "user:pw@ep-cool-1.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+    want = "postgresql+psycopg2://" + base
+    for raw in (f"postgresql://{base}", f"postgres://{base}", f"postgresql+psycopg://{base}", f"psql 'postgresql://{base}'", f'"postgresql://{base}"', f"  postgresql://{base}\n"):
+        assert store.normalise_db_url(raw) == want
+    assert store.normalise_db_url("") is None
+    with pytest.raises(ValueError): store.normalise_db_url("not a url")
+
+
+def test_bad_database_url_falls_back_with_a_warning(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://nobody:x@127.0.0.1:1/none?connect_timeout=1")
+    store.reset_engine()
+    assert store.backend_name().startswith("SQLite") and "Could not connect" in store.config_warning
+    store.create_user("eve__", "s3cure-pass")  # the app still works

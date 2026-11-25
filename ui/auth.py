@@ -45,6 +45,7 @@ def page():
                         except store.AuthError as e:
                             st.error(str(e))
         st.caption(f"Projects are private to your account. Storage: {store.backend_name()}.")
+        if store.config_warning: st.warning(store.config_warning)
 
 
 def remember():

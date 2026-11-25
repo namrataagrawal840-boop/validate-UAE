@@ -69,25 +69,53 @@ class AuthError(Exception):
 _engine = None
 
 
+config_warning = None  # shown on the login page when DATABASE_URL could not be used
+
+
+def normalise_db_url(raw):
+    """Accept any form Neon, Supabase or Render show: plain postgresql://, postgres://, postgresql+psycopg://,
+    or the whole `psql 'postgresql://...'` command, with or without quotes. Always use the psycopg2 driver,
+    which is the one installed (requirements.txt)."""
+    raw = (raw or "").strip().strip("'\"")
+    if not raw: return None
+    m = re.search(r"postgres(?:ql)?(?:\+[a-z0-9_]+)?://[^\s'\"]+", raw)
+    if not m: raise ValueError("DATABASE_URL does not look like a PostgreSQL connection string (it should start with postgresql://).")
+    url = m.group(0)
+    return "postgresql+psycopg2://" + url.split("://", 1)[1]
+
+
+def _sqlite_url():
+    path = os.getenv("DB_PATH") or os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "validateuae.db")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    return f"sqlite:///{path}"
+
+
 def engine():
-    global _engine
+    global _engine, config_warning
     if _engine is None:
-        url = os.getenv("DATABASE_URL", "").strip()
-        if url.startswith("postgres://"): url = "postgresql://" + url[len("postgres://"):]
-        if not url:
-            path = os.getenv("DB_PATH") or os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "validateuae.db")
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            url = f"sqlite:///{path}"
-        kw = dict(connect_args={"check_same_thread": False}) if url.startswith("sqlite") else dict(pool_pre_ping=True, pool_size=3, max_overflow=2)
-        _engine = create_engine(url, future=True, **kw)
+        url = None
+        try:
+            url = normalise_db_url(os.getenv("DATABASE_URL"))
+        except ValueError as e:
+            config_warning = f"{e} Using a temporary local database for now."
+        if url:
+            try:
+                eng = create_engine(url, future=True, pool_pre_ping=True, pool_size=3, max_overflow=2)
+                meta.create_all(eng)
+                _engine = eng
+                return _engine
+            except Exception as e:  # wrong password, host unreachable, missing driver...
+                config_warning = (f"Could not connect to the database in DATABASE_URL ({type(e).__name__}: {str(e).splitlines()[0][:160]}). "
+                                  "Using a temporary local database for now: accounts made now are lost when the app restarts.")
+        _engine = create_engine(_sqlite_url(), future=True, connect_args={"check_same_thread": False})
         meta.create_all(_engine)
     return _engine
 
 
 def reset_engine():
     """For tests: forget the cached engine so a new DB_PATH / DATABASE_URL is used."""
-    global _engine, _SECRET
-    _SECRET = None
+    global _engine, _SECRET, config_warning
+    _SECRET = None; config_warning = None
     if _engine is not None: _engine.dispose()
     _engine = None
 
