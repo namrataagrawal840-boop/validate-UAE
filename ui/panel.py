@@ -31,7 +31,10 @@ def save_panel(panel, message):
 def run(r, size, debate_size, use_ai):
     with st.status("Building the panel…", expanded=True) as box:
         st.write(f"Drawing {size} people from the simulated UAE market and working out their reactions…")
-        panel = PN.build(r, n=size, seed=int(dt.datetime.now().timestamp()) % 100000)
+        from ui.social import summary_for
+        soc = summary_for(ss.state, r)
+        if soc: st.write(f"Grounding them in {soc['n']} real public posts…")
+        panel = PN.build(r, n=size, seed=int(dt.datetime.now().timestamp()) % 100000, social=soc)
         if use_ai:
             st.write("Claude is writing each person's own opinion…")
             PN.ai_voices(panel, r)
@@ -62,6 +65,7 @@ def page(r, state):
     if not panel: return
     s = PN.synthesise(panel, r)
     mode = "Opinions written by Claude" if panel["mode"] == "ai" else "Opinions follow the buying model; text from templates"
+    if panel.get("grounded"): mode += f" · grounded in {panel['grounded']['posts']} real posts"
     st.caption(f"{panel['n']} simulated customers · {mode} · run on {panel['created_at'][:10]}")
     tabs = st.tabs(["Answers", "People", "Feedback and survey", "Focus group", "Ask a person"])
     with tabs[0]: answers(panel, s, r, state)
@@ -144,6 +148,11 @@ def people(panel):
                 st.markdown(f"<i>“{esc(p['quote'])}”</i>", unsafe_allow_html=True)
                 st.markdown(f"<span class='muted' style='font-size:13px'>Would change my mind: {esc(p['change_mind'])}<br>Would pay up to about {aed(p['wtp'])}/month · "
                             f"group: {esc(p['segment'])}</span>", unsafe_allow_html=True)
+                e = p.get("echo")
+                if e:
+                    link = f' <a href="{esc(e["url"])}" target="_blank">open</a>' if e.get("url") else ""
+                    st.markdown(f"<span class='muted' style='font-size:12.5px'>Echoes {pct(e['share'])} of real posts, e.g. {esc(e['platform'])}: “{esc(e['text'][:120])}”{link}</span>",
+                                unsafe_allow_html=True)
 
 
 def feedback(panel, s):

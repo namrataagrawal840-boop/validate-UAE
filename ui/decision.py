@@ -49,6 +49,14 @@ def page(r, state):
         kpi(k[0], 0, f"Chance of paying back in {f['horizon']} months", pct(f["p_payback"]), f"You need {pct(L['min_payback'])}", "p_payback")
         kpi(k[1], 2, "Chance of needing more than your budget", pct(f["p_ruin"]), f"Your limit {pct(L['max_ruin'])}", "p_ruin")
         kpi(k[2], 1, "Evidence confidence", pct(b["confidence"]), f"{b['hypotheses']['validated']} validated · {b['hypotheses']['disproved']} disproved hypotheses", "evidence")
+    from app import market_size as MZ
+    mz = MZ.size(r, state.get("market_overrides"), state.get("panel"))
+    y1, y2 = st.columns([5, 1.4])
+    y1.markdown(soft(f"<b>Market size (published UAE statistics):</b> TAM {aed(mz['tam']['aed'])}/yr ({mz['tam']['people']:,.0f} people) · "
+                     f"SAM {aed(mz['sam']['aed'])}/yr ({mz['sam']['people']:,.0f}) · SOM {aed(mz['som']['aed'])}/yr ({mz['som']['people']:,.0f} customers)", "sky"),
+                unsafe_allow_html=True)
+    if y2.button("Open Market size", key="g_mz", width="stretch"):
+        ss.section = "Market size"; st.rerun()
     pn = state.get("panel")
     if pn:
         from app import panel as PN

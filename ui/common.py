@@ -201,7 +201,8 @@ def ensure_starter():
     st_ = ss.state; changed = False
     if not st_.get("panel"):
         try:
-            pn = PN.build(ss.result, n=40); pn["debate"] = PN.debate(pn, ss.result)
+            from ui.social import summary_for
+            pn = PN.build(ss.result, n=40, social=summary_for(st_, ss.result)); pn["debate"] = PN.debate(pn, ss.result)
             st_ = copy.deepcopy(st_); st_["panel"] = pn; changed = True
         except Exception:  # a missing panel must never block opening a project
             pass

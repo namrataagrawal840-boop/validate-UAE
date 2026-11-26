@@ -107,8 +107,10 @@ def _people(m, it, n, seed):
     return rng.choice(idx, min(n, len(idx)), replace=False), rng
 
 
-def build(result, n=40, seed=2027):
-    """Create n personas from the synthetic market with their reactions to the idea."""
+def build(result, n=40, seed=2027, social=None):
+    """Create n personas from the synthetic market with their reactions to the idea.
+    With a social-listening summary, objections follow what real people post, mood follows real sentiment,
+    and each persona links to a real example post (grounding)."""
     it = result["intake"]; bt = it["business_type"]
     m = market(int(result["settings"].get("seed", 2027)), bt)
     price = float(result["assumptions"]["price"]["likely"])
@@ -124,6 +126,9 @@ def build(result, n=40, seed=2027):
     people = []
     used = set()
     only = audience(it)
+    real_obj = (social or {}).get("objections") or {}
+    mood = float((social or {}).get("sentiment") or 0)
+    lift = float(np.clip(.8 + .4 * ((social or {}).get("positive", 0) - (social or {}).get("negative", 0)) + (social or {}).get("demand", 0), .6, 1.4)) if social else 1.0
     for j, i in enumerate(pick):
         g = only or ("f" if rng.random() < .5 else "m")
         name = rng.choice(NAMES[g])
@@ -135,16 +140,19 @@ def build(result, n=40, seed=2027):
         p = float(p_all[i]); wtp = float(w_all[i]); pain = float(m["pain"][i]); dig = float(m["digital"][i])
         # stated intent overstates real buying; drawn so that the discounted rate matches the model
         # chosen so that yes x 0.45 + maybe x 0.12 = the model's probability on average
-        y = float(np.clip(1.5 * p, 0, .9)); mb = float(np.clip(2.7 * p, 0, 1 - y))
+        y = float(np.clip(1.5 * p * lift, 0, .9)); mb = float(np.clip(2.7 * p * lift, 0, 1 - y))
         r = rng.random(); intent = "yes" if r < y else "maybe" if r < y + mb else "no"
         ratio = wtp / price
         reasons = {"price": max(0, 1.3 - ratio) * 2, "no_pain": max(0, .45 - pain) * 3, "trust": .35 + .2 * rng.random(),
                    "switching": .25 + .3 * (1 - pain) * rng.random(), "convenience": abs(dig - (.9 if online else .4)) * 1.2,
                    "competitor": .3 * float((result.get("competition") or {}).get("rivalry", 3) / 3) * rng.random(), "time": (.25 if "children" in house else .1) * rng.random()}
+        if real_obj: reasons = {k: v * (1 + 4 * real_obj.get(k, 0)) for k, v in reasons.items()}  # what real people actually complain about
         obj = max(reasons, key=reasons.get)
         likes = {"pain": pain, "value": min(1, ratio / 1.5), "fit": 1 - reasons["convenience"], "new": .4 + .2 * rng.random()}
         like = max(likes, key=likes.get)
-        rating = int(np.clip(round(4 + 6 * (pain - .4) + 3 * np.log(max(ratio, .05)) + (2 if intent == "yes" else 0) + rng.normal(0, 1.2)), 0, 10))
+        rating = int(np.clip(round(4 + 6 * (pain - .4) + 3 * np.log(max(ratio, .05)) + (2 if intent == "yes" else 0) + 3 * mood + rng.normal(0, 1.2)), 0, 10))
+        ex = ((social or {}).get("examples") or {}).get(f"obj_{obj}") or []
+        echo = dict(ex[int(rng.integers(len(ex)))], share=real_obj.get(obj, 0)) if ex else None
         noise = np.exp(rng.normal(0, .12, 4))
         vw = sorted([wtp * .45 * noise[0], wtp * .7 * noise[1], wtp * 1.05 * noise[2], wtp * 1.45 * noise[3]])
         o_title = OBJECTIONS[obj][0]
@@ -157,9 +165,10 @@ def build(result, n=40, seed=2027):
             segment=seg_names.get(int(labels[i]), "Other buyers"), pain=pain, wtp=wtp, p_buy=p, spend_today=float(m["cat_spend"][i]),
             openness=float(np.clip(rng.beta(3, 3), .1, .9)), intent=intent, rating=rating, objection=obj, objection_title=o_title, like=like,
             quote=(liked + " " + text) if intent != "no" else text,
-            change_mind=str(rng.choice(SAY_FIX[obj])), van_westendorp=[round(x) for x in vw], price_view="Good value" if ratio > 1.2 else "About right" if ratio > .9 else "Too expensive",
+            change_mind=str(rng.choice(SAY_FIX[obj])), echo=echo, van_westendorp=[round(x) for x in vw], price_view="Good value" if ratio > 1.2 else "About right" if ratio > .9 else "Too expensive",
             source="model"))
     return dict(created_at=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), n=len(people), price=price, people=people, mode="model",
+                grounded=dict(posts=social["n"], platforms=social["platforms"], sentiment=mood) if social else None,
                 model_rate=float(p_all[fidx].mean()) if len(fidx) else 0.0, debate=None)
 
 
