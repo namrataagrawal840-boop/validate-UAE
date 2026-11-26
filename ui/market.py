@@ -24,6 +24,12 @@ def page(r, state):
     kpi(k[1], 1, "SAM: you can reach", aed(m["sam"]["aed"]) + "/yr", f"{num(m['sam']['people'])} people within reach of one business")
     kpi(k[2], 2, "Interested in this idea", num(m["interested"]["people"]), "From the simulated customer panel")
     kpi(k[3], 3, "SOM: you can win", aed(m["som"]["aed"]) + "/yr", f"{num(m['som']['people'])} customers · {pct(m['som']['share_of_sam'], 1)} of SAM")
+    from ui.search import summary_for as search_summary
+    sdm = search_summary(state, r)
+    if sdm and sdm.get("total"):
+        st.markdown(soft(f"<b>Search demand check:</b> people in the UAE search Google for related phrases about "
+                         f"{num(sdm['total']) if not sdm.get('ranges') else num(sdm['total_low']) + '–' + num(sdm['total_high'])} times a month "
+                         f"({pct(sdm['buy_share'])} with buying intent). That is real, current demand behind the market estimate.", "mint"), unsafe_allow_html=True)
     st.write("")
     c1, c2 = st.columns([1.25, 1])
     with c1:

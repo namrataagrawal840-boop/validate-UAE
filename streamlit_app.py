@@ -15,7 +15,7 @@ import streamlit as st
 st.set_page_config(page_title="ValidateUAE", page_icon="🌿", layout="wide")
 
 # Secrets -> environment, before the backend is imported. Secrets never appear in code or in the repository.
-for _k in ("ANTHROPIC_API_KEY", "ANTHROPIC_MODEL", "WEB_SEARCH_TOOL", "SIM_MODE", "DATABASE_URL", "SECRET_KEY", "ALLOW_SIGNUP", "YOUTUBE_API_KEY", "REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"):
+for _k in ("ANTHROPIC_API_KEY", "ANTHROPIC_MODEL", "WEB_SEARCH_TOOL", "SIM_MODE", "DATABASE_URL", "SECRET_KEY", "ALLOW_SIGNUP", "YOUTUBE_API_KEY", "REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "DATAFORSEO_LOGIN", "DATAFORSEO_PASSWORD", "SERPAPI_KEY"):
     try:
         if _k in st.secrets and not os.getenv(_k):
             os.environ[_k] = str(st.secrets[_k])
@@ -28,7 +28,7 @@ log = logging.getLogger("validateuae")
 from app import store  # noqa: E402
 from ui import auth, dashboard, onboarding, glossary  # noqa: E402
 from ui.common import ss, styles, esc, pill_status, user_id, open_project  # noqa: E402
-from ui import sections  # noqa: E402
+from ui import sections, simple  # noqa: E402
 
 styles()
 
@@ -46,6 +46,8 @@ def restore_session():
         ss._restored = True
         try:
             open_project(qp["p"]); ss.view = "project"; ss.section = qp.get("sec", "Decision")
+            ss.mode = "Full" if qp.get("m") == "f" else "Simple"
+            if qp.get("sp", "").isdigit() and 1 <= int(qp["sp"]) <= len(simple.PAGES): ss.simple_page = simple.PAGES[int(qp["sp"]) - 1]
         except store.NotFound:
             del st.query_params["p"]
     if ss.get("user") and qp.get("v") == "new" and not ss.get("view"):
@@ -57,7 +59,9 @@ def sync_address():
     want = {"s": st.query_params.get("s")}
     v = ss.get("view", "dashboard")
     if v == "project" and ss.get("pid"):
-        want.update(p=ss.pid, sec=ss.get("section", "Decision"))
+        want.update(p=ss.pid, m=ss.get("mode", "Simple")[0].lower())
+        if ss.get("mode", "Simple") == "Simple": want["sp"] = ss.get("simple_page", simple.PAGES[0])[0]
+        else: want["sec"] = ss.get("section", "Decision")
     elif v == "new":
         want["v"] = "new"
     want = {k: x for k, x in want.items() if x}
@@ -100,11 +104,21 @@ else:
             st.markdown(f"**{esc(ss.get('pname', 'Project'))}** {pill_status(ss.result['decision']['code'])}", unsafe_allow_html=True)
             if ss.get("view") != "project" and st.button("Back to this project", width="stretch"):
                 ss.view = "project"; st.rerun()
-            names = list(sections.SECTIONS)
-            cur = ss.get("section", "Decision")
-            choice = st.radio("Project sections", names, index=names.index(cur) if cur in names else 0, label_visibility="collapsed")
-            if choice != cur:
-                ss.section = choice; ss.view = "project"; st.rerun()
+            mode = st.segmented_control("View", ["Simple", "Full"], default=ss.get("mode", "Simple"),
+                                        help="Simple: five plain pages. Full: every analysis and tool.") or ss.get("mode", "Simple")
+            if mode != ss.get("mode", "Simple"):
+                ss.mode = mode; ss.view = "project"; st.rerun()
+            if ss.get("mode", "Simple") == "Simple":
+                cur = ss.get("simple_page", simple.PAGES[0])
+                choice = st.radio("Pages", simple.PAGES, index=simple.PAGES.index(cur) if cur in simple.PAGES else 0, label_visibility="collapsed")
+                if choice != cur:
+                    ss.simple_page = choice; ss.view = "project"; st.rerun()
+            else:
+                names = list(sections.SECTIONS)
+                cur = ss.get("section", "Decision")
+                choice = st.radio("Project sections", names, index=names.index(cur) if cur in names else 0, label_visibility="collapsed")
+                if choice != cur:
+                    ss.section = choice; ss.view = "project"; st.rerun()
         st.divider()
         if st.button("Glossary of terms", width="stretch"):
             ss.view = "glossary"; st.rerun()
@@ -118,7 +132,10 @@ else:
     elif view == "glossary":
         guarded(glossary.page)
     elif view == "project" and ss.get("pid") and ss.get("result"):
-        guarded(sections.render, ss.get("section", "Decision"))
+        if ss.get("mode", "Simple") == "Simple":
+            guarded(lambda: (sections.header(), simple.render(ss.get("simple_page", simple.PAGES[0]))))
+        else:
+            guarded(sections.render, ss.get("section", "Decision"))
     else:
         guarded(dashboard.page)
 

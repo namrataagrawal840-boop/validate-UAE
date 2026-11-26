@@ -232,7 +232,7 @@ def finish(d, sales_v, link_rows):
         ss.state, ss.result, ss.pname, ss.baseline, ss._explain = state, r, name, None, explain(r)
         from ui.common import ensure_starter
         ensure_starter()
-        ss.view = "project"; ss.section = "Decision"; ss.pop("ob", None); store.delete_draft(user_id())
+        ss.view = "project"; ss.section = "Decision"; ss.mode = "Simple"; ss.simple_page = "1. Idea"; ss.pop("ob", None); store.delete_draft(user_id())
     except Exception as e:  # keep the user's answers; show what went wrong
         st.error(f"The analysis could not be completed: {e}. Your answers are kept; try again.")
         return

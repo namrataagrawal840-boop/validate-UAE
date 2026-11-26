@@ -41,7 +41,7 @@ def page(r, state):
         y1 = s["revenue_by_year"][0] if s["revenue_by_year"] else 0
         lines = [("Value (NPV)", aed(s["npv"])), ("Revenue in year 1", aed(y1)), ("Break-even month", f"Month {s['break_even_month']}" if s["break_even_month"] else "Not reached"),
                  ("Payback month", f"Month {s['payback_month']}" if s["payback_month"] else "Not reached"), ("Lowest cash", f"{aed(s['lowest_cash'])} (month {s['lowest_cash_month']})"),
-                 ("Budget", "Lasts the whole horizon" if s["budget_lasts"] else f"Runs out after {s['runway_months']} months"), ("Customers at the end", num(s["customers_end"]))]
+                 ("Budget", "Lasts the whole horizon" if s["budget_lasts"] else "Used up by setup and pre-opening costs" if s["runway_months"] == 0 else f"Runs out after {s['runway_months']} month{'' if s['runway_months'] == 1 else 's'}"), ("Customers at the end", num(s["customers_end"]))]
         col.markdown(f'<div class="pcard" style="background:{bg};border-color:{bd}"><div style="font-weight:700;color:{fg};margin-bottom:6px">{name}</div>'
                      + "".join(f'<div style="display:flex;justify-content:space-between;font-size:14px;padding:2px 0"><span class="muted">{a}</span><b>{esc(b)}</b></div>' for a, b in lines)
                      + "</div>", unsafe_allow_html=True)
