@@ -8,14 +8,15 @@ from app import store
 from app import lab as LB
 from ui import decision
 from ui.market import KIND as MKIND
-from ui.common import ss, esc, aed, pct, num, kpi, section, soft, PASTEL, kind_pill, user_id
+from ui.common import ss, esc, aed, pct, num, kpi, section, soft, PASTEL, kind_pill, user_id, approx, rng, payback_line
+from ui.glossary import gloss
 
-PAGES = ["1. Idea", "2. Market", "3. Customers", "4. Money", "5. Decision"]
+PAGES = ["1. Idea", "2. Market", "3. Customers", "4. Money", "5. Decision", "6. Run a test", "7. Share"]
 
 
 def answer(text, colour="lavender"):
     bg, bd, fg = PASTEL[colour]
-    st.markdown(f'<div class="banner" style="background:{bg};border-color:{bd};padding:18px 22px"><div style="font-size:19px;line-height:1.5;color:#2b3047">{text}</div></div>',
+    st.markdown(f'<div class="banner" style="background:{bg};border-color:{bd};padding:18px 22px"><div style="font-size:19px;line-height:1.5;color:#2b3047">{gloss(text)}</div></div>',
                 unsafe_allow_html=True)
 
 
@@ -27,7 +28,7 @@ def more(*targets):
 
 
 def nxt(i):
-    if i < len(PAGES) - 1 and st.button(f"Next: {PAGES[i + 1][3:]} →", type="primary", key=f"next{i}"):
+    if i < len(PAGES) - 1 and st.button(f"Next: {PAGES[i + 1][3:]} →", type="primary" if i != 4 else "secondary", key=f"next{i}"):
         ss.simple_page = PAGES[i + 1]; st.rerun()
 
 
@@ -56,19 +57,22 @@ def market(r, state):
     s = search_summary(state, r)
     comp = r["competition"]
     base = next(x for x in m["steps"] if x["key"] == "category")
-    lead = (f"Yes: about <b>{num(m['tam']['people'])} people</b> {esc(base['label'].replace('…who ', '').replace(' (TAM)', ''))} in {esc(m['area'])}, "
-            f"spending about <b>{aed(m['tam']['aed'])} a year</b>. One business like yours can reach about {num(m['sam']['people'])} of them, "
-            f"and could realistically win about <b>{num(m['som']['people'])} customers</b>.")
+    R = m.get("ranges") or dict(tam=(m["tam"]["people"],) * 2, sam=(m["sam"]["people"],) * 2, som=(m["som"]["people"],) * 2)
+    tam_aed = lambda x: x * m["tam"]["aed"] / max(m["tam"]["people"], 1)
+    lead = (f"Yes: roughly <b>{rng(*R['tam'])} people</b> {esc(base['label'].replace('…who ', '').replace(' (TAM)', ''))} in {esc(m['area'])}, "
+            f"spending about <b>{aed(m['tam']['aed'])} a year</b>. One business like yours can reach roughly {rng(*R['sam'])} of them, "
+            f"and could realistically win <b>{rng(*R['som'])} customers</b> (typical: {approx(m['som']['people'])}).")
     if s and s.get("total"):
-        lead += f" People in the UAE search Google for this about <b>{num(s['total'])} times a month</b>."
+        lead += f" People in the UAE search Google for this about <b>{approx(s['total'])} times a month</b>" + \
+                (f", about {approx(s['local_total'])} of them in {esc(s['local_area'])}." if s.get("local_total") else ".")
     answer(lead, "sky")
     k = st.columns(4)
-    kpi(k[0], 0, "Total market (TAM)", aed(m["tam"]["aed"]) + "/yr", f"{num(m['tam']['people'])} people")
-    kpi(k[1], 1, "You can reach (SAM)", aed(m["sam"]["aed"]) + "/yr", f"{num(m['sam']['people'])} people")
-    kpi(k[2], 2, "You can win (SOM)", aed(m["som"]["aed"]) + "/yr", f"{num(m['som']['people'])} customers")
+    kpi(k[0], 0, "Total market (TAM)", aed(m["tam"]["aed"]) + "/yr", f"{rng(*R['tam'])} people")
+    kpi(k[1], 1, "You can reach (SAM)", aed(m["sam"]["aed"]) + "/yr", f"{rng(*R['sam'])} people")
+    kpi(k[2], 2, "You can win (SOM)", aed(m["som"]["aed"]) + "/yr", f"{rng(*R['som'])} customers")
     if s and s.get("total"):
-        kpi(k[3], 3, "Google searches a month", num(s["total"]) if not s.get("ranges") else f"{num(s['total_low'])}–{num(s['total_high'])}",
-            f"Busiest in {s['peak']}" if s.get("peak") else "UAE, for related phrases")
+        kpi(k[3], 3, "Google searches a month", approx(s["total"]) if not s.get("ranges") else rng(s['total_low'], s['total_high']),
+            (f"≈{approx(s['local_total'])} in {s['local_area']}" if s.get("local_total") else "UAE, for related phrases") + (f" · busiest in {s['peak']}" if s.get("peak") else ""))
     else:
         kpi(k[3], 3, "Google searches a month", "Not checked", "Open Search demand to add it")
     st.write("")
@@ -78,7 +82,7 @@ def market(r, state):
             section("Where these numbers come from", "mint")
             for x in m["steps"][:4]:
                 t, tone = MKIND[x["kind"]]
-                st.markdown(f"{esc(x['label'].replace('…', ''))}: <b>{num(x['people'])}</b> <span class='pill p-{tone}'>{t}</span>"
+                st.markdown(f"{esc(x['label'].replace('…', ''))}: <b>{num(x['people']) if x['kind'] == 'official' else 'about ' + approx(x['people'])}</b> <span class='pill p-{tone}'>{t}</span>"
                             f"<br><span class='muted' style='font-size:12.5px'>{esc(x['source'])}</span>", unsafe_allow_html=True)
     with c2:
         with st.container(border=True):
@@ -107,8 +111,10 @@ def customers(r, state):
         from ui.social import OBJ_LABEL
         parts.append(f"In {so['n']} real public posts, {pct(so['positive'])} are positive and {pct(so['demand'])} are people asking for something like this; "
                      f"the top complaint is {esc(OBJ_LABEL[top].lower())}.")
-    parts.append(f"Real tests: <b>{sum(e['status'] == 'validated' for e in evs)} confirmed, {sum(e['status'] == 'invalidated' for e in evs)} disproved</b>, "
-                 f"{len(evs) - len(tested)} still to run." if hyps else "No real tests yet.")
+    dts = state.get("desk_tests") or {}
+    nd = sum(1 for t in dts.values() if t.get("status") == "done")
+    parts.append(f"Desk tests done: <b>{nd}</b> (no customers needed). " + (f"Optional customer tests: {sum(e['status'] == 'validated' for e in evs)} confirmed, "
+                 f"{sum(e['status'] == 'invalidated' for e in evs)} disproved." if tested else ""))
     answer(" ".join(parts), "mint")
     c1, c2 = st.columns(2)
     with c1:
@@ -128,11 +134,15 @@ def customers(r, state):
             else:
                 st.markdown("No posts collected yet. Paste 10-20 comments from Instagram or Google reviews in Social listening; it takes two minutes.")
     with st.container(border=True):
-        section("Tests with real people", "peach")
+        section("Your tests", "peach")
+        for t in dts.values():
+            tone = {"better": "good", "worse": "bad"}.get(t.get("direction"), "warn" if t.get("status") == "planned" else "info")
+            st.markdown(f"<span class='pill p-{tone}'>{'Running' if t.get('status') == 'planned' else 'Desk test'}</span> {esc(t.get('finding') or t.get('name', ''))}", unsafe_allow_html=True)
+        if hyps: st.caption("Optional tests with customers (validation lab):")
         for h, e in zip(hyps, evs):
             tone = {"validated": "good", "invalidated": "bad"}.get(e["status"], "warn")
             st.markdown(f"<span class='pill p-{tone}'>{e['status'].capitalize()}</span> {esc(h['statement'])}", unsafe_allow_html=True)
-        if not hyps: st.markdown("Add a hypothesis in the Validation lab.")
+        if not hyps and not dts: st.markdown("No tests yet: page 6 suggests desk tests you can run alone.")
     more(("Customer panel", "Customer panel"), ("Social listening", "Social listening"), ("Validation lab", "Validation lab"))
     nxt(2)
 
@@ -146,27 +156,80 @@ def budget_text(s):
 def money(r, state):
     st.header("Does the money work?")
     F = r["finance"]; f = r["stages"]["forecast"]; L = r["limits"]; sc = F["scenarios"]; be = F["break_even"]; t = F["tornado"]["rows"][0]
-    lead = (f"You need about <b>{num(be['customers'])} customers</b> to cover your monthly costs. "
-            + (f"In a typical future you break even in <b>month {round(be['median_month'])}</b>" if be["median_month"] else "In a typical future you <b>don't break even</b> within the plan")
-            + f", and there's a <b>{pct(f['p_payback'])} chance</b> of getting your money back within {f['horizon']} months (you wanted {pct(L['min_payback'])}). "
+    pv = F.get("payback") or {}
+    h = f["horizon"]; std = round(L["min_payback"] * 10)
+    if pv.get("typical"):
+        when = f"In a typical future you get your money back in <b>month {pv['typical']}</b>"
+        safe = (f"; to be fairly safe ({std} in 10 futures) plan for <b>month {pv['safe']}</b>" if pv.get("safe") else
+                f"; but fewer than {std} in 10 futures pay back within the plan")
+    else:
+        when = f"In a typical future you <b>do not get your money back within {h} months</b>"; safe = ""
+    verdict = (f"Your limit is {h} months, so this <b>passes</b>." if pv.get("passes") else
+               f"Your limit is {h} months, so this <b>misses by {pv['months_over']} months</b>." if pv.get("months_over") else
+               f"Your limit is {h} months, so this <b>does not pass</b>.")
+    best = (r.get("decision") or {}).get("best")
+    fix = (f" “{esc(best['name'])}” would bring the typical payback to month {round(best['payback_median'])}." if best and best.get("payback_median") and not pv.get("passes") else "")
+    lead = (f"You need about <b>{approx(be['customers'])} customers</b> to cover your monthly costs. {when}{safe}. {verdict}{fix} "
             f"Have about <b>{aed(F['runway']['cash_need_p90'])}</b> ready. What matters most: {esc(t['name'].lower())}.")
     answer(lead, "butter")
     cols = st.columns(3)
     for col, (key, name, colour) in zip(cols, [("bad", "Bad case", "rose"), ("typical", "Typical case", "sky"), ("good", "Good case", "mint")]):
-        s = sc[key]; bg, bd, fg = PASTEL[colour]
+        s_ = sc[key]; bg, bd, fg = PASTEL[colour]
         col.markdown(f'<div class="pcard" style="background:{bg};border-color:{bd}"><div style="font-weight:700;color:{fg}">{name}</div>'
-                     f'<div style="font-size:24px;font-weight:700;margin:4px 0">{aed(s["npv"])}</div><div class="muted" style="font-size:13.5px">'
-                     f'{"Break-even month " + str(s["break_even_month"]) if s["break_even_month"] else "No break-even"} · '
-                     f'{budget_text(s)}</div></div>', unsafe_allow_html=True)
-    st.write("")
+                     f'<div style="font-size:24px;font-weight:700;margin:4px 0">{aed(s_["npv"])}</div><div class="muted" style="font-size:13.5px">'
+                     f'{"Money back in month " + str(s_["payback_month"]) if s_["payback_month"] else "Money not back within " + str(h) + " months"} · '
+                     f'{budget_text(s_)}</div></div>', unsafe_allow_html=True)
+    st.caption("Cases are three actual simulated futures, picked by their value (NPV) at the 10th, 50th and 90th percentile. "
+               "“Money back” = the first month cumulative cash, after setup and pre-opening costs, is back to zero; this is the one payback definition used everywhere.")
     k = st.columns(3)
-    kpi(k[0], 0, "Chance of paying back", pct(f["p_payback"]), f"You need {pct(L['min_payback'])}")
+    head, sub, ok = payback_line(r)
+    kpi(k[0], 0, "Typical payback", head, sub)
     kpi(k[1], 2, "Chance of needing more than your budget", pct(f["p_ruin"]), f"Your limit {pct(L['max_ruin'])}")
     kpi(k[2], 1, "Each customer brings", aed(be["contribution"]) + "/month", "after variable costs")
+    sensitivity_table(r)
     more(("Financials", "Financials"), ("What-if lab", "What-if lab"))
     nxt(3)
 
 
+def sensitivity_table(r):
+    """What would change the answer: the two inputs that most often decide it. Uses replays already run."""
+    import pandas as pd
+    S = r.get("sensitivity")
+    if not S: return
+    with st.expander("What would change the answer? (sensitivity)", expanded=False):
+        st.caption(gloss("How the chance of paying back within your time limit moves if the buyers within reach, or your price, differ from the estimate. "
+                         "The sensitivity of the plan shows which number to check first."))
+        c1, c2 = st.columns(2)
+        std = r["limits"]["min_payback"]
+        c1.markdown("**If buyers within reach are…**")
+        c1.dataframe(pd.DataFrame([{"Of the estimate": f"{x['mult']:.0%}", "Buyers": approx(x["buyers"]), "Paid back in time": pct(x["p_payback"]),
+                                    "Passes": "✓" if x["p_payback"] >= std else "✗"} for x in S["market"]]), hide_index=True, width="stretch")
+        c2.markdown("**If your price is…**")
+        c2.dataframe(pd.DataFrame([{"Price": aed(x["price"]) + "/month", "Typical payback": f"month {round(x['payback_median'])}" if x["payback_median"] else "beyond plan",
+                                    "Paid back in time": pct(x["p_payback"]), "Passes": "✓" if x["p_payback"] >= std and x["p_ruin"] <= r["limits"]["max_ruin"] else "✗"} for x in S["price"]]),
+                     hide_index=True, width="stretch")
+
+
+def decision_page(r, state):
+    decision.page(r, state)
+    nxt(4)
+
+
+def test_page(r, state):
+    from ui import loop
+    loop.page(r, state)
+    nxt(5)
+
+
+def share_page(r, state):
+    from ui import share
+    share.page(r, state)
+
+
 def render(name):
+    from ui import loop, share
     r, state = ss.result, ss.state
-    {"1. Idea": idea, "2. Market": market, "3. Customers": customers, "4. Money": money}.get(name, lambda r, s: decision.page(r, s))(r, state)
+    loop.progress(r, state)
+    {"1. Idea": idea, "2. Market": market, "3. Customers": customers, "4. Money": money, "5. Decision": decision_page,
+     "6. Run a test": test_page, "7. Share": share_page}.get(name, decision_page)(r, state)
+    share.comments_box(name[3:])

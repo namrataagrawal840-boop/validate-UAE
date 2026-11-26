@@ -72,7 +72,27 @@ def runway_now(cash_left, monthly_burn):
     return float(cash_left / monthly_burn)
 
 
-def analyse(sim, S, unit, A, budget, open_months, horizon):
+def month_at(payback, share):
+    """The month by which `share` of the simulated futures have got their money back (None if not within the plan)."""
+    srt = np.sort(np.asarray(payback, float)); n = len(srt)
+    v = srt[max(0, int(np.ceil(share * n)) - 1)]
+    return None if not np.isfinite(v) else int(v)
+
+
+def payback_view(sim, horizon, standard):
+    """One definition of payback everywhere: the first month the cumulative cash, after setup and pre-opening
+    costs, is back to zero. `typical` = half the futures are paid back by then; `safe` = the share set by the
+    safety standard (default 6 in 10) is paid back by then. The founder only sets the time limit."""
+    pb = sim["payback"]
+    typical, safe = month_at(pb, .5), month_at(pb, standard)
+    within = float(np.mean(np.isfinite(pb) & (pb <= horizon)))
+    passes = safe is not None and safe <= horizon
+    return dict(typical=typical, safe=safe, standard=standard, horizon=horizon, p_within=within, passes=passes,
+                months_over=None if safe is None else max(0, safe - horizon),
+                spread=[month_at(pb, q) for q in (.1, .25, .5, .75, .9)])
+
+
+def analyse(sim, S, unit, A, budget, open_months, horizon, standard=.6):
     sc = scenarios(sim, budget, open_months)
     t = tornado(sim)
     be_months = np.array([_first(sim["paths"]["profit"][i] > 0) or np.inf for i in range(sim["runs"])])
@@ -82,4 +102,4 @@ def analyse(sim, S, unit, A, budget, open_months, horizon):
                                 p_by_horizon=float(np.mean(np.isfinite(be_months))), median_month=float(np.median(be_months)) if np.isfinite(np.median(be_months)) else None),
                 runway=dict(budget=budget, p_runs_out=float(np.mean(np.isfinite(out_t))), median_months_if_runs_out=float(np.median(out_t[np.isfinite(out_t)])) if np.isfinite(out_t).any() else None,
                             cash_need_p50=S["cash_need_p50"], cash_need_p90=S["cash_need_p90"]),
-                open_months=open_months)
+                open_months=open_months, payback=payback_view(sim, horizon, standard))

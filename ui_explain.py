@@ -5,7 +5,7 @@ def aed(v):
     if v is None or v != v or abs(v) == float("inf"):
         return "–"
     a = abs(v)
-    s = f"{a / 1e9:.1f}B" if a >= 1e9 else f"{a / 1e6:.2f}M" if a >= 1e6 else f"{round(a / 1e3)}k" if a >= 1e4 else f"{a:,.0f}"
+    s = f"{a / 1e9:.1f}B" if a >= 1e9 else (f"{a / 1e6:.1f}M" if a < 1e8 else f"{round(a / 1e6)}M") if a >= 1e6 else f"{round(a / 1e3)}k" if a >= 1e4 else f"{a:,.0f}"
     return ("−" if v < 0 else "") + "AED " + s
 
 
@@ -32,8 +32,8 @@ def explain(r):
     V, M, VV, IM, EV = r["validation"], r["market_sizing"], r["value"], r["improve"], S["experiments"]["evidence"]
     D = {
         "decision": ("How the decision is made",
-                     f"Every tested launch plan is simulated. A plan passes when its chance of paying back is at least your {pct(L['min_payback'])}, its chance of needing more cash than your budget is at most {pct(L['max_ruin'])}, and its expected value is positive. Among passing plans the one with the highest expected value wins. If the evidence behind the numbers is thin, the answer becomes “test first”, so the tool never says “launch” on guesses alone. Hard limits, such as a licence blocker or capacity below break-even, override everything.",
-                     f"pass = P(payback ≤ {f['horizon']} months) ≥ {pct(L['min_payback'])}\n   AND P(cash need > {aed(L['budget'])}) ≤ {pct(L['max_ruin'])}\n   AND E[NPV] > 0\nbest = highest E[NPV] among passing plans\nevidence strength = {pct(r['evidence']['strength'])} (test first if below 35%)",
+                     f"Every tested launch plan is simulated. A plan passes when at least {pct(L['min_payback'])} of simulated futures (the safety standard) pay back within your {f['horizon']} months, its chance of needing more cash than your budget is at most {pct(L['max_ruin'])}, and its expected value is positive. Among passing plans the one with the highest expected value wins. If the evidence behind the numbers is thin, the answer becomes “test first”, so the tool never says “launch” on guesses alone. Hard limits, such as a licence blocker or capacity below break-even, override everything.",
+                     f"pass = P(payback ≤ {f['horizon']} months) ≥ {pct(L['min_payback'])}\n   AND P(cash need > {aed(L['budget'])}) ≤ {pct(L['max_ruin'])}\n   AND E[NPV] > 0\nbest = highest E[NPV] among passing plans\nevidence strength = {pct(r['evidence']['strength'])} (test first if below 35%, unless the top 3 inputs are each desk-checked)",
                      [("Payback chance", pct(f["p_payback"]), ""), ("Chance of exceeding budget", pct(f["p_ruin"]), ""), ("Expected NPV", aed(f["npv_mean"]), ""), ("Evidence strength", pct(r["evidence"]["strength"]), "")]),
         "p_payback": ("Chance of paying back (agent-based simulation)",
                       f"The market is simulated customer by customer and replayed {num(f['runs'])} times with different draws of the uncertain inputs, because one run is only one story. Before opening the business pays half its fixed costs. Then each month every simulated customer may hear about you through marketing or friends, decide to buy, have a good or bad experience, and stay or leave. Shocks, competitor promotions, boom and downturn months and UAE seasons hit along the way. The chance is the share of replays where cumulative cash climbs back above zero within {f['horizon']} months.",

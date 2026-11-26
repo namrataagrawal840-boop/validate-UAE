@@ -20,6 +20,8 @@ CREDIT = EVD.LABEL_CREDIT  # kept for compatibility
 LABEL = {"measured": "Measured", "benchmarked": "Benchmarked (your source)", "web": "Benchmarked (web source)", "founder": "Founder input",
          "ai": "AI estimate", "critic": "AI estimate, cut by the critic", "derived": "Derived by the model", "prior": "Category prior"}
 DEFAULT_SETTINGS = dict(runs=P.RUNS_MAIN, shocks=2, cycles=True, seasonality=True, seed=2027)
+MODEL_VERSION = "2026.11.2"
+SAFETY_STANDARD = .6  # a plan counts as safe when at least 6 in 10 simulated futures pay back within the founder's time limit
 
 
 def tri(v):
@@ -137,7 +139,7 @@ def compute(state, light=False):
     it = state["intake"]; bt = it["business_type"]; t = P.TYPES[bt]; ag = state.get("agents", {})
     st = {**DEFAULT_SETTINGS, **(state.get("settings") or {})}
     seed = int(st["seed"]); horizon = int(it.get("horizon_months") or 36)
-    limits = dict(budget=float(it.get("budget_aed") or 500_000), min_payback=float(it.get("min_payback_probability") or .6),
+    limits = dict(budget=float(it.get("budget_aed") or 500_000), min_payback=float(st.get("safety_standard") or SAFETY_STANDARD), horizon=horizon,
                   max_ruin=float(it.get("max_ruin_probability") or .2))
     m = market(seed, bt)
     A, warnings = build_assumptions(state)
@@ -230,7 +232,10 @@ def compute(state, light=False):
               usability=us, evidence=strength * 100)
     result["scores"] = sc
     result["evidence"] = evidence
-    result["validation"] = V.validation_score(sc, strength, len((ag.get("critic") or {}).get("weak_claims") or []), S["p_payback"])
+    meets = S["p_payback"] >= limits["min_payback"] and S["p_ruin"] <= limits["max_ruin"]
+    result["validation"] = V.validation_score(sc, strength, len((ag.get("critic") or {}).get("weak_claims") or []), S["p_payback"], meets)
+    result["validation"].update(V.score_parts(sc, meets))
+    result["run_info"] = run_info(state, st, limits)
     result["market_sizing"] = V.market_sizing(desc, pot, spend["expected_arpu"], S["customers_end_p50"], ag.get("market"))
     fidx = np.where(p_adopt > 0)[0][:6000]
     result["value"] = V.customer_value(ag, value_ratio, pain_adopt, price, MS.wtp(m)[fidx])
@@ -265,12 +270,12 @@ def compute(state, light=False):
     blockers = [b for b in ((ag.get("regulation") or {}).get("hard_blockers") or []) if b]
     if A["capacity"]["likely"] < bep_customers:
         blockers.append(f"Capacity ({A['capacity']['likely']:,.0f} customers) is below the {bep_customers:,.0f} customers needed to cover fixed costs.")
-    decision = D.decide(base_row, opts, limits, evidence, blockers)
+    lk = D.leak(sim)
+    decision = D.decide(base_row, opts, limits, evidence, blockers, desk_coverage(lk, areas))
     stages["optimise"] = dict(options=sorted(opts, key=lambda o: -o["npv_mean"]), channel_mix=mix_lp, base=base_row)
     result["decision"] = decision
 
     # Step 6: leaks and kill criteria
-    lk = D.leak(sim)
     kill = fut_kill.result(); result["improve"] = fut_var.result(); pool_ex.shutdown()
     result["leak"] = lk; result["kill"] = kill
     result["kit"] = V.experiment_kit(it, ag, price, stages["experiments"]["sample_size_landing"], rate)
@@ -292,7 +297,9 @@ def compute(state, light=False):
         concentration=dict(top_segment=segs[0]["name"] if segs else None, top_share=segs[0]["value_share"] if segs else None),
         optimism_flags=anom["optimistic_count"], neutral_brief=bool((ag.get("orch") or {}).get("neutral_brief")))
     result["evidence"]["gaps"] = EVD.gaps(areas, lk["rows"])
-    result["finance"] = FIN.analyse(sim, S, unit, A, limits["budget"], t["open_months"], horizon)
+    result["finance"] = FIN.analyse(sim, S, unit, A, limits["budget"], t["open_months"], horizon, limits["min_payback"])
+    result["sensitivity"] = sensitivity(kill, opts, price, pot_used)
+    result["runs_table"] = runs_table(sim)
     result["kill_criteria"] = kill_criteria(result, limits)
     result["next_steps"] = next_steps(result)
     result["brief"] = BR.build(result, state)
@@ -357,3 +364,60 @@ def what_if(state, overrides, settings):
     s = copy.deepcopy(state); s["overrides"] = {**(s.get("overrides") or {}), **overrides}; s["settings"] = {**(s.get("settings") or {}), **settings}
     r = compute(s, light=True)
     return dict(forecast=r["stages"]["forecast"], unit=r["unit"], scores=r["scores"])
+
+
+def run_info(state, st, limits):
+    """Everything needed to reproduce this exact result: seed, run count, model version, data vintage, input fingerprint."""
+    import hashlib, json, datetime as dt
+    from . import public_data as PD
+    payload = json.dumps(dict(intake=state.get("intake"), settings=st, ledger=[{k: v for k, v in (r or {}).items() if k not in ("created_at", "id")} for r in state.get("ledger") or []],
+                              experiments=state.get("experiments"), overrides=state.get("overrides"), applied=state.get("applied")), sort_keys=True, default=str)
+    return dict(seed=int(st["seed"]), runs=int(st["runs"]), shocks=st["shocks"], model_version=MODEL_VERSION, safety_standard=limits["min_payback"],
+                data_vintage=PD.vintage(), computed_at=dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+                input_hash=hashlib.sha256(payload.encode()).hexdigest()[:16])
+
+
+def sensitivity(kill, opts, price, buyers):
+    """How the payback chance moves with the two inputs that most often decide the verdict. Uses replays the
+    engine already ran (the stop-rule search and the launch options), so it costs nothing extra."""
+    market = [dict(mult=c["mult"], buyers=buyers * c["mult"], rate=c["rate"], p_payback=c["p_payback"]) for c in kill["curve"]]
+    pr = sorted([dict(mult=o["price_mult"], price=price * o["price_mult"], p_payback=o["p_payback"], p_ruin=o["p_ruin"], npv=o["npv_mean"], payback_median=o["payback_median"])
+                 for o in opts if o["scale"] == "standard" and not o["focus"]], key=lambda r: r["mult"])
+    return dict(market=market, price=pr)
+
+
+def runs_table(sim, limit=1000):
+    """Every simulated future: the inputs it drew and what happened, for analysts to download."""
+    keys = [k for k in FIN.KEYS if k in sim["inputs"]]
+    n = min(sim["runs"], limit)
+    rows = [[i + 1] + [round(float(sim["inputs"][k][i]), 4) for k in keys] + [round(float(sim["npv"][i]), 0),
+            None if not np.isfinite(sim["payback"][i]) else int(sim["payback"][i]), round(float(sim["peak_need"][i]), 0)] for i in range(n)]
+    return dict(columns=["run"] + keys + ["npv_aed", "payback_month", "peak_cash_need_aed"], rows=rows)
+
+
+def stability(state, seeds=(11, 23, 37, 53, 71)):
+    """Rerun the forecast with different random seeds: how much does the answer move by chance alone?"""
+    out = []
+    for sd in seeds:
+        s = copy.deepcopy(state); s["settings"] = {**(s.get("settings") or {}), "seed": sd}
+        f = compute(s, light=True)["stages"]["forecast"]
+        out.append(dict(seed=sd, p_payback=f["p_payback"], p_ruin=f["p_ruin"], npv_mean=f["npv_mean"], payback_median=f["payback_median"]))
+    pp = [o["p_payback"] for o in out]
+    return dict(runs=out, p_payback_min=min(pp), p_payback_max=max(pp), p_payback_spread=max(pp) - min(pp))
+
+
+INPUT_AREA = {"market": "market", "q": "market", "arpu": "price", "churn": "churn", "cac": "cac", "p": "cac", "fixed": "fixed", "setup": "setup",
+              "var_pct": "var_pct", "capacity": "capacity", "satisfaction": "pain"}
+
+
+def desk_coverage(lk, areas, top=3, min_weight=.15):
+    """Are the inputs that explain most of the uncertainty each backed by at least one real record (desk test, quote,
+    measurement) of weight >= 0.15 in their area? Different inputs that share an area count once."""
+    seen, covered, missing = set(), [], []
+    for row in lk["rows"]:
+        a = INPUT_AREA.get(row["key"])
+        if not a or a in seen: continue
+        seen.add(a)
+        (covered if areas.get(a, {}).get("ledger", 0) >= min_weight else missing).append(areas.get(a, {}).get("name", a).lower())
+        if len(seen) == top: break
+    return dict(ok=not missing and bool(covered), covered=covered, missing=missing)

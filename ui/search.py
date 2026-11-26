@@ -23,7 +23,8 @@ def summary_for(state, r, click_share=None):
     sd = state.get("search") or {}
     if not sd.get("rows") and not sd.get("trends"): return None
     st_ = settings(r)
-    return SD.analyse(sd.get("rows"), sd.get("trends"), st_["landing_rate"], st_["pay_rate"], click_share or sd.get("click_share", .05), st_["cac_assumed"])
+    out = SD.analyse(sd.get("rows"), sd.get("trends"), st_["landing_rate"], st_["pay_rate"], click_share or sd.get("click_share", .05), st_["cac_assumed"])
+    return SD.localise(out, r["intake"].get("emirate")) if out else out
 
 
 def save(update, message, r):

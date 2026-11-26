@@ -114,10 +114,11 @@ def page():
             st.markdown("**Your decision limits**")
             c1, c2 = st.columns(2)
             budget = c1.number_input("Cash you can put in (AED)", 1000, value=int(d["budget_aed"]), step=10000, help="Everything you could invest, including setup and early losses.")
-            horizon = c2.selectbox("Time to pay back", [24, 36, 48, 60], [24, 36, 48, 60].index(d["horizon_months"]), format_func=lambda m: f"{m} months", help=G.term("Payback"))
-            minp = c1.select_slider("Minimum chance of paying back", [.5, .6, .7, .8], d["min_payback_probability"], format_func=lambda v: f"{v:.0%}",
-                                    help="In how many of 100 simulated futures must you get your money back for this to be worth it?")
-            maxr = c2.select_slider("Most risk of running out of budget you accept", [.05, .1, .2, .3], d["max_ruin_probability"], format_func=lambda v: f"{v:.0%}",
+            hs = [12, 18, 24, 36, 48, 60]
+            horizon = c2.selectbox("Within how many months do you need your money back?", hs, hs.index(d["horizon_months"]) if d["horizon_months"] in hs else 3,
+                                   format_func=lambda m: f"{m} months", help=G.term("Payback"))
+            c1.caption("We call a plan safe when at least 6 in 10 simulated futures pay back within your time limit. You only choose the time.")
+            maxr = c1.select_slider("Most risk of running out of budget you accept", [.05, .1, .2, .3], d["max_ruin_probability"], format_func=lambda v: f"{v:.0%}",
                                     help=G.term("Chance of running out (budget risk)"))
             st.markdown("**Your numbers (optional)** <span class='muted'>Leave at 0 if you don't know: typical values for this business type are used and labelled as such.</span>", unsafe_allow_html=True)
             c1, c2 = st.columns(2)
@@ -129,7 +130,7 @@ def page():
             back, skip, nxt = nav(2)
         if back or skip or nxt:
             if not skip:
-                d.update(budget_aed=float(budget), horizon_months=horizon, min_payback_probability=minp, max_ruin_probability=maxr, price=price, fixed=fixed,
+                d.update(budget_aed=float(budget), horizon_months=horizon, max_ruin_probability=maxr, price=price, fixed=fixed,
                          setup_budget=setupc, marketing_budget_aed=mkt)
             ob["step"] = 1 if back else 3; _save_draft(); st.rerun()
     else:
@@ -229,9 +230,9 @@ def finish(d, sales_v, link_rows):
         with st.spinner("Running the 10-stage funnel and the market simulation…"):
             r = run_compute(state); r["_version"] = RESULT_VERSION
         store.save_project(user_id(), pid, result=r)
-        ss.state, ss.result, ss.pname, ss.baseline, ss._explain = state, r, name, None, explain(r)
-        from ui.common import ensure_starter
-        ensure_starter()
+        ss.state, ss.result, ss.pname, ss.baseline, ss._explain, ss.role = state, r, name, None, explain(r), "owner"
+        from ui.common import ensure_starter, snapshot
+        ensure_starter(); snapshot("Project created")
         ss.view = "project"; ss.section = "Decision"; ss.mode = "Simple"; ss.simple_page = "1. Idea"; ss.pop("ob", None); store.delete_draft(user_id())
     except Exception as e:  # keep the user's answers; show what went wrong
         st.error(f"The analysis could not be completed: {e}. Your answers are kept; try again.")

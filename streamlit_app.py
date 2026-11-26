@@ -15,7 +15,8 @@ import streamlit as st
 st.set_page_config(page_title="ValidateUAE", page_icon="🌿", layout="wide")
 
 # Secrets -> environment, before the backend is imported. Secrets never appear in code or in the repository.
-for _k in ("ANTHROPIC_API_KEY", "ANTHROPIC_MODEL", "WEB_SEARCH_TOOL", "SIM_MODE", "DATABASE_URL", "SECRET_KEY", "ALLOW_SIGNUP", "YOUTUBE_API_KEY", "REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "DATAFORSEO_LOGIN", "DATAFORSEO_PASSWORD", "SERPAPI_KEY"):
+for _k in ("ANTHROPIC_API_KEY", "ANTHROPIC_MODEL", "WEB_SEARCH_TOOL", "SIM_MODE", "DATABASE_URL", "SECRET_KEY", "ALLOW_SIGNUP", "YOUTUBE_API_KEY", "REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "DATAFORSEO_LOGIN", "DATAFORSEO_PASSWORD", "SERPAPI_KEY",
+           "SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "ALERT_FROM", "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_WHATSAPP_FROM"):
     try:
         if _k in st.secrets and not os.getenv(_k):
             os.environ[_k] = str(st.secrets[_k])
@@ -77,8 +78,11 @@ def guarded(fn, *args):
     try:
         fn(*args)
     except store.NotFound:
-        st.error("That item was not found or belongs to another account.")
-        for k in ("pid", "state", "result"): ss.pop(k, None)
+        if ss.get("role") == "viewer":
+            st.warning("You have view-only access to this project: you can read it and comment, but not change it.")
+        else:
+            st.error("That item was not found or belongs to another account.")
+            for k in ("pid", "state", "result"): ss.pop(k, None)
     except Exception as e:  # noqa: BLE001
         log.exception("Page error")
         st.error(f"Something went wrong on this page: {e}")
@@ -105,7 +109,7 @@ else:
             if ss.get("view") != "project" and st.button("Back to this project", width="stretch"):
                 ss.view = "project"; st.rerun()
             mode = st.segmented_control("View", ["Simple", "Full"], default=ss.get("mode", "Simple"),
-                                        help="Simple: five plain pages. Full: every analysis and tool.") or ss.get("mode", "Simple")
+                                        help="Simple: seven plain pages. Full: every analysis and tool, in six groups.") or ss.get("mode", "Simple")
             if mode != ss.get("mode", "Simple"):
                 ss.mode = mode; ss.view = "project"; st.rerun()
             if ss.get("mode", "Simple") == "Simple":
@@ -114,11 +118,11 @@ else:
                 if choice != cur:
                     ss.simple_page = choice; ss.view = "project"; st.rerun()
             else:
-                names = list(sections.SECTIONS)
-                cur = ss.get("section", "Decision")
-                choice = st.radio("Project sections", names, index=names.index(cur) if cur in names else 0, label_visibility="collapsed")
+                groups = list(sections.GROUPS)
+                cur = sections.GROUP_OF.get(ss.get("section", "Decision"), "Decision")
+                choice = st.radio("Project sections", groups, index=groups.index(cur), label_visibility="collapsed")
                 if choice != cur:
-                    ss.section = choice; ss.view = "project"; st.rerun()
+                    ss.section = sections.GROUPS[choice][0]; ss.view = "project"; st.rerun()
         st.divider()
         if st.button("Glossary of terms", width="stretch"):
             ss.view = "glossary"; st.rerun()

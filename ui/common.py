@@ -49,6 +49,7 @@ section[data-testid="stSidebar"] { background: #faf9ff; border-right: 1px solid 
 [data-testid="stMetricValue"] { font-size: 24px !important; font-weight: 600; color: #2b3047; }
 [data-testid="stMetricLabel"] p { color: #6b7189 !important; }
 div[data-testid="stTabs"] button p { font-size: 15px; }
+abbr.gl { text-decoration: underline dotted #9aa1c7; text-underline-offset: 3px; cursor: help; }
 </style>
 """
 
@@ -104,9 +105,39 @@ def chart(fig):
     st.plotly_chart(fig, width="stretch", config={"displayModeBar": False}, key=f"chart{_N[0]}")
 
 
+def approx(v):
+    """Round to two significant figures: estimates should not look more exact than they are."""
+    if v is None or v != v: return "–"
+    a = abs(v)
+    if a >= 1e6: s = f"{a / 1e6:.1f}M" if a < 1e7 else f"{round(a / 1e6)}M"
+    elif a >= 1e3: s = f"{float(f'{a:.2g}') / 1e3:g}k"
+    else: s = f"{float(f'{a:.2g}'):g}" if a >= 10 else f"{a:.0f}"
+    return ("−" if v < 0 else "") + s
+
+
+def rng(lo, hi, money=False):
+    f = (lambda x: "AED " + approx(x)) if money else approx
+    return f(lo) if approx(lo) == approx(hi) else f"{f(lo)}–{approx(hi)}"
+
+
+def payback_line(r):
+    """One definition of payback everywhere, in months: (headline, sub-line, passes)."""
+    pv = r.get("finance", {}).get("payback")
+    f = r["stages"]["forecast"]
+    if not pv:  # older results
+        return (f"{pct(f['p_payback'])}", f"chance of paying back within {f['horizon']} months", None)
+    h = pv["horizon"]; std = round(pv["standard"] * 10)
+    head = f"Month {pv['typical']}" if pv["typical"] else f"After {h} months"
+    if pv["passes"]: sub = f"{std} in 10 futures by month {pv['safe']} · your limit {h} ✓"
+    elif pv["safe"]: sub = f"{std} in 10 futures only by month {pv['safe']} · your limit {h} ✗"
+    else: sub = f"Fewer than {std} in 10 futures pay back within the plan · your limit {h} ✗"
+    return head, sub, pv["passes"]
+
+
 def kpi(col, i, label, value, sub="", math_key=None):
+    from ui.glossary import gloss
     with col:
-        st.markdown(f'<div class="kpi k{i % 4}"><div class="l">{esc(label)}</div><div class="v">{esc(value)}</div><div class="s">{esc(sub)}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi k{i % 4}"><div class="l">{gloss(esc(label))}</div><div class="v">{esc(value)}</div><div class="s">{esc(sub)}</div></div>', unsafe_allow_html=True)
         if math_key: math(math_key)
 
 
@@ -179,17 +210,34 @@ def run_compute(state):
     return compute(s)
 
 
+def can_edit():
+    return ss.get("role", "owner") in ("owner", "editor")
+
+
 def open_project(pid):
     p = store.load_project(user_id(), pid)
-    ss.pid, ss.state, ss.pname, ss.baseline = pid, p["state"], p["name"], p["baseline"]
+    ss.pid, ss.state, ss.pname, ss.baseline, ss.role = pid, p["state"], p["name"], p["baseline"], p.get("role", "owner")
     ss.result = p["result"]
     if not ss.result or ss.result.get("_version") != RESULT_VERSION:
         with st.spinner("Updating this project to the latest analysis…"):
             ss.result = run_compute(ss.state); ss.result["_version"] = RESULT_VERSION
-        store.save_project(user_id(), pid, result=ss.result)
+        if can_edit():
+            store.save_project(user_id(), pid, result=ss.result)
+            snapshot("Updated to the latest analysis")
     ss._explain = explain(ss.result)
     for k in ("lab_out",): ss.pop(k, None)
-    ensure_starter()
+    if can_edit(): ensure_starter()
+
+
+def snapshot(reason):
+    """Version history + activity log for every recalculation. Never blocks the action."""
+    from app import history as H
+    try:
+        n = len(store.list_evidence(user_id(), ss.pid))
+        store.add_snapshot(user_id(), ss.pid, reason, H.summary(ss.result, ss.state, n))
+    except Exception:
+        pass
+    store.log(user_id(), ss.pid, "Recalculated", reason or "")
 
 
 def ensure_starter():
@@ -220,12 +268,15 @@ def ensure_starter():
 
 
 def refresh(message=None, state=None):
-    """Recalculate with the current state and ledger, save, and rerun the page."""
+    """Recalculate with the current state and ledger, save, record the version, and rerun the page."""
+    if not can_edit():
+        st.warning("You have view-only access to this project: you can read it and comment, but not change it."); st.stop()
     if state is not None: ss.state = state
     with st.spinner("Recalculating…"):
         r = run_compute(ss.state); r["_version"] = RESULT_VERSION
     store.save_project(user_id(), ss.pid, state=ss.state, result=r)
     ss.result = r; ss._explain = explain(r)
+    snapshot(message or "Recalculated")
     if message: ss.flash = message
     st.rerun()
 
@@ -235,7 +286,7 @@ def recompute(mutate, message):
     refresh(message, state)
 
 
-RESULT_VERSION = 5
+RESULT_VERSION = 6
 
 
 # ---------------- experiments always come with a ledger record ----------------

@@ -9,7 +9,7 @@ shown in the app carries the label "Category prior" so users can tell.
 """
 
 # Illustrative population structure. Replace with official statistics.
-UAE_POPULATION = 10_000_000  # illustrative scale used to convert simulated people to real counts
+UAE_POPULATION = 12_060_000  # usual residents, FCSC 2025 (public_data.POPULATION["All UAE"]); converts simulated people to real counts
 EMIRATES = [("Dubai", .37), ("Abu Dhabi", .30), ("Sharjah", .17), ("Ajman", .06),
             ("Ras Al Khaimah", .05), ("Fujairah", .03), ("Umm Al Quwain", .02)]
 AGE_BANDS = [("18-24", .14, 21), ("25-34", .33, 30), ("35-44", .28, 40), ("45-54", .15, 50), ("55+", .10, 60)]

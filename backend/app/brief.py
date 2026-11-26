@@ -64,8 +64,11 @@ def build(r, state):
     plural = lambda n, one, many: f"{n} {one if n == 1 else many}"
     reasons = [x for x in r["decision"]["reasons"] if not x.startswith("Evidence is thin")]
     nrec = plural(ev["real_records"], "real-world evidence record", "real-world evidence records")
-    if ev["strength"] < .35:
-        reasons.append(f"Evidence confidence is {ev['strength']:.0%}, below the 35% needed before recommending a launch ({nrec}). AI estimates and simulations add nothing to it.")
+    if ev["strength"] < .35 and r["decision"].get("desk_route"):
+        reasons.append(f"Evidence confidence is {ev['strength']:.0%} ({nrec}): below 35%, but the key numbers are desk-checked. AI estimates and simulations add nothing to it.")
+    elif ev["strength"] < .35:
+        reasons.append(f"Evidence confidence is {ev['strength']:.0%} ({nrec}). A launch call needs 35%, or the three numbers that move the answer most each checked by a desk test. "
+                       "AI estimates and simulations add nothing to it.")
     else:
         reasons.append(f"Evidence confidence is {ev['strength']:.0%}, from {nrec}. AI estimates and simulations add nothing to it.")
     dis = [h for h, e in hev if e["status"] == "invalidated"]; val = [h for h, e in hev if e["status"] == "validated"]
@@ -81,7 +84,8 @@ def build(r, state):
         acts.append(dict(action=f"Rework the plan around the disproved hypothesis: {h['statement'][:90]}", why="A core assumption failed its test.", where="Improve my idea"))
     if r["decision"]["code"] in ("pivot", "test") and r["decision"].get("best") and r["decision"]["best"]["name"] != "Your plan as described":
         b = r["decision"]["best"]
-        acts.append(dict(action=f"Consider the launch plan “{b['name']}”", why=f"Payback chance {b['p_payback']:.0%} vs {f['p_payback']:.0%} now.", where="Funnel (all 10 stages)"))
+        acts.append(dict(action=f"Consider the launch plan “{b['name']}”", why=(f"Typical payback month {round(b['payback_median'])} vs " + (f"month {round(f['payback_median'])}" if f.get('payback_median') else "beyond the plan") + " now; "
+                     if b.get('payback_median') else "") + f"{b['p_payback']:.0%} vs {f['p_payback']:.0%} of futures paid back in time.", where="Funnel (all 10 stages)"))
     for g in ev.get("gaps", []):
         if not any(h.get("area") == g["area"] for h, _ in hev):
             acts.append(dict(action=f"{g['how']} ({g['name'].lower()})", why=f"Biggest evidence gap: {g['confidence']:.0%} confidence.", where=g.get("where", "Validation lab")))

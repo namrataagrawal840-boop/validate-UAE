@@ -56,6 +56,21 @@ actuals = Table("actuals", meta,
                 Column("new_customers", Float), Column("visitors", Float), Column("conversions", Float), Column("repeat_customers", Float),
                 Column("marketing_spend", Float), Column("notes", Text), Column("created_at", String(32)),
                 UniqueConstraint("project_id", "month", name="uq_actual_month"))
+# Teams: a project is shared with other users as editor (can change it) or viewer (can read and comment).
+members = Table("members", meta,
+                Column("project_id", String(36), ForeignKey("projects.id"), primary_key=True), Column("user_id", String(36), ForeignKey("users.id"), primary_key=True, index=True),
+                Column("role", String(16), nullable=False), Column("added_at", String(32)))
+comments = Table("comments", meta,
+                 Column("id", String(36), primary_key=True), Column("project_id", String(36), ForeignKey("projects.id"), index=True, nullable=False),
+                 Column("user_id", String(36)), Column("section", String(80)), Column("text", Text), Column("resolved", Integer, default=0), Column("created_at", String(32)))
+activity = Table("activity", meta,
+                 Column("id", String(36), primary_key=True), Column("project_id", String(36), ForeignKey("projects.id"), index=True, nullable=False),
+                 Column("user_id", String(36)), Column("action", String(80)), Column("detail", Text), Column("created_at", String(32)))
+# Version history: a compact snapshot of inputs and key outputs each time the project is recomputed.
+snapshots = Table("snapshots", meta,
+                  Column("id", String(36), primary_key=True), Column("project_id", String(36), ForeignKey("projects.id"), index=True, nullable=False),
+                  Column("user_id", String(36)), Column("reason", Text), Column("summary", LargeBinary), Column("created_at", String(32)))
+ROLES = ("editor", "viewer")
 
 
 class NotFound(Exception):
@@ -257,9 +272,24 @@ def read_token(token):
 
 
 # ---------------- projects ----------------
-def _own(c, user_id, project_id):
-    row = c.execute(select(projects.c.id).where(projects.c.id == project_id, projects.c.user_id == user_id)).first()
-    if not row: raise NotFound("project")
+def _role(c, user_id, project_id):
+    row = c.execute(select(projects.c.user_id).where(projects.c.id == project_id)).first()
+    if not row: return None
+    if row[0] == user_id: return "owner"
+    m = c.execute(select(members.c.role).where(members.c.project_id == project_id, members.c.user_id == user_id)).first()
+    return m[0] if m else None
+
+
+def _own(c, user_id, project_id, need="write"):
+    """Owner and editors may write; viewers may only read (and comment). Anyone else gets NotFound."""
+    r = _role(c, user_id, project_id)
+    if r is None or (need == "write" and r == "viewer"): raise NotFound("project")
+    return r
+
+
+def role_of(user_id, project_id):
+    with engine().connect() as c:
+        return _role(c, user_id, project_id)
 
 
 def _summary(result):
@@ -288,26 +318,40 @@ def save_project(user_id, project_id, state=None, result=None, name=None):
 
 
 def list_projects(user_id):
-    cols = [projects.c[k] for k in ("id", "name", "created_at", "updated_at", "status", "status_label", "score", "confidence", "business_type", "emirate")]
+    """Your own projects and the ones shared with you (role says which)."""
+    cols = [projects.c[k] for k in ("id", "name", "created_at", "updated_at", "status", "status_label", "score", "confidence", "business_type", "emirate", "user_id")]
     with engine().connect() as c:
-        rows = c.execute(select(*cols).where(projects.c.user_id == user_id).order_by(projects.c.updated_at.desc())).mappings().all()
-        counts = dict(c.execute(select(evidence.c.project_id, func.count()).join(projects, projects.c.id == evidence.c.project_id)
-                                .where(projects.c.user_id == user_id).group_by(evidence.c.project_id)).all())
-    return [dict(r, evidence_count=int(counts.get(r["id"], 0))) for r in rows]
+        shared = dict(c.execute(select(members.c.project_id, members.c.role).where(members.c.user_id == user_id)).all())
+        rows = c.execute(select(*cols, users.c.username.label("owner")).join(users, users.c.id == projects.c.user_id)
+                         .where((projects.c.user_id == user_id) | projects.c.id.in_(list(shared) or [""])).order_by(projects.c.updated_at.desc())).mappings().all()
+        ids = [r["id"] for r in rows]
+        counts = dict(c.execute(select(evidence.c.project_id, func.count()).where(evidence.c.project_id.in_(ids or [""])).group_by(evidence.c.project_id)).all())
+    return [dict({k: v for k, v in r.items() if k != "user_id"}, evidence_count=int(counts.get(r["id"], 0)),
+                 role="owner" if r["user_id"] == user_id else shared.get(r["id"])) for r in rows]
 
 
 def load_project(user_id, project_id):
     with engine().connect() as c:
-        r = c.execute(select(projects).where(projects.c.id == project_id, projects.c.user_id == user_id)).mappings().first()
-    if not r: raise NotFound("project")
+        role = _own(c, user_id, project_id, "read")
+        r = c.execute(select(projects).where(projects.c.id == project_id)).mappings().first()
     return dict(id=r["id"], name=r["name"], state=unpack(r["state"]), result=unpack(r["result"]), baseline=unpack(r["baseline"]),
-                updated_at=r["updated_at"], created_at=r["created_at"])
+                updated_at=r["updated_at"], created_at=r["created_at"], role=role)
+
+
+def project_summaries(user_id, project_ids):
+    """Key outputs of several projects for the side-by-side comparison (read access needed for each)."""
+    out = []
+    for pid in project_ids:
+        try: p = load_project(user_id, pid)
+        except NotFound: continue
+        out.append(dict(id=pid, name=p["name"], result=p["result"], state=p["state"]))
+    return out
 
 
 def delete_project(user_id, project_id):
     with engine().begin() as c:
-        _own(c, user_id, project_id)
-        for t in (evidence, hypotheses, actuals):
+        if _own(c, user_id, project_id) != "owner": raise NotFound("project")
+        for t in (evidence, hypotheses, actuals, members, comments, activity, snapshots):
             c.execute(delete(t).where(t.c.project_id == project_id))
         c.execute(delete(projects).where(projects.c.id == project_id))
 
@@ -345,7 +389,7 @@ def update_evidence(user_id, project_id, evidence_id, changes):
 def list_evidence(user_id, project_id):
     cols = [evidence.c[k] for k in ["id", "created_at"] + EVIDENCE_FIELDS]
     with engine().connect() as c:
-        _own(c, user_id, project_id)
+        _own(c, user_id, project_id, "read")
         rows = c.execute(select(*cols, (evidence.c.file_blob.isnot(None)).label("has_file")).where(evidence.c.project_id == project_id)
                          .order_by(evidence.c.created_at)).mappings().all()
     return [dict(r) for r in rows]
@@ -353,7 +397,7 @@ def list_evidence(user_id, project_id):
 
 def evidence_file(user_id, project_id, evidence_id):
     with engine().connect() as c:
-        _own(c, user_id, project_id)
+        _own(c, user_id, project_id, "read")
         r = c.execute(select(evidence.c.file_name, evidence.c.file_mime, evidence.c.file_blob)
                       .where(evidence.c.id == evidence_id, evidence.c.project_id == project_id)).first()
     if not r or r[2] is None: raise NotFound("file")
@@ -387,7 +431,7 @@ def update_hypothesis(user_id, project_id, hid, changes):
 
 def list_hypotheses(user_id, project_id):
     with engine().connect() as c:
-        _own(c, user_id, project_id)
+        _own(c, user_id, project_id, "read")
         rows = c.execute(select(hypotheses).where(hypotheses.c.project_id == project_id).order_by(hypotheses.c.created_at)).mappings().all()
     return [dict(r, plan=json.loads(r["plan"]) if r["plan"] else None) for r in rows]
 
@@ -412,7 +456,7 @@ def upsert_actual(user_id, project_id, rec):
 
 def list_actuals(user_id, project_id):
     with engine().connect() as c:
-        _own(c, user_id, project_id)
+        _own(c, user_id, project_id, "read")
         rows = c.execute(select(actuals).where(actuals.c.project_id == project_id).order_by(actuals.c.month)).mappings().all()
     return [dict(r) for r in rows]
 
@@ -421,3 +465,143 @@ def delete_actual(user_id, project_id, month):
     with engine().begin() as c:
         _own(c, user_id, project_id)
         c.execute(delete(actuals).where(actuals.c.project_id == project_id, actuals.c.month == int(month)))
+
+
+# ---------------- teams ----------------
+def find_user(username):
+    with engine().connect() as c:
+        r = c.execute(select(users.c.id, users.c.username).where(func.lower(users.c.username) == (username or "").strip().lower())).first()
+    return dict(id=r[0], username=r[1]) if r else None
+
+
+def share_project(owner_id, project_id, username, role):
+    if role not in ROLES: raise ValueError("Role must be editor or viewer.")
+    u = find_user(username)
+    if not u: raise ValueError(f"No account called {username!r}. Ask them to sign up first, then share again.")
+    with engine().begin() as c:
+        if _own(c, owner_id, project_id) != "owner": raise NotFound("project")
+        if u["id"] == owner_id: raise ValueError("You already own this project.")
+        c.execute(delete(members).where(members.c.project_id == project_id, members.c.user_id == u["id"]))
+        c.execute(insert(members).values(project_id=project_id, user_id=u["id"], role=role, added_at=now()))
+    return u
+
+
+def unshare_project(owner_id, project_id, member_id):
+    with engine().begin() as c:
+        if _own(c, owner_id, project_id) != "owner" and owner_id != member_id: raise NotFound("project")
+        c.execute(delete(members).where(members.c.project_id == project_id, members.c.user_id == member_id))
+
+
+def list_members(user_id, project_id):
+    with engine().connect() as c:
+        _own(c, user_id, project_id, "read")
+        owner = c.execute(select(users.c.id, users.c.username).join(projects, projects.c.user_id == users.c.id).where(projects.c.id == project_id)).first()
+        rows = c.execute(select(users.c.id, users.c.username, members.c.role, members.c.added_at).join(members, members.c.user_id == users.c.id)
+                         .where(members.c.project_id == project_id)).mappings().all()
+    return [dict(id=owner[0], username=owner[1], role="owner", added_at=None)] + [dict(r) for r in rows]
+
+
+def usernames(ids):
+    with engine().connect() as c:
+        return dict(c.execute(select(users.c.id, users.c.username).where(users.c.id.in_(list(ids) or [""]))).all())
+
+
+def add_comment(user_id, project_id, section, text):
+    text = (text or "").strip()[:2000]
+    if not text: raise ValueError("Write a comment first.")
+    cid = str(uuid.uuid4())
+    with engine().begin() as c:
+        _own(c, user_id, project_id, "read")
+        c.execute(insert(comments).values(id=cid, project_id=project_id, user_id=user_id, section=(section or "")[:80], text=text, resolved=0, created_at=now()))
+    return cid
+
+
+def list_comments(user_id, project_id, section=None, include_resolved=False):
+    with engine().connect() as c:
+        _own(c, user_id, project_id, "read")
+        q = select(comments).where(comments.c.project_id == project_id)
+        if section: q = q.where(comments.c.section == section)
+        if not include_resolved: q = q.where(comments.c.resolved == 0)
+        rows = c.execute(q.order_by(comments.c.created_at)).mappings().all()
+    names = usernames({r["user_id"] for r in rows})
+    return [dict(r, username=names.get(r["user_id"], "former member")) for r in rows]
+
+
+def resolve_comment(user_id, project_id, comment_id):
+    with engine().begin() as c:
+        _own(c, user_id, project_id, "read")
+        c.execute(update(comments).where(comments.c.id == comment_id, comments.c.project_id == project_id).values(resolved=1))
+
+
+def log(user_id, project_id, action, detail=""):
+    """Activity log: who changed what. Never raises: logging must not break the action it records."""
+    try:
+        with engine().begin() as c:
+            c.execute(insert(activity).values(id=str(uuid.uuid4()), project_id=project_id, user_id=user_id, action=action[:80], detail=(detail or "")[:1000], created_at=now()))
+    except Exception:
+        pass
+
+
+def list_activity(user_id, project_id, limit=200):
+    with engine().connect() as c:
+        _own(c, user_id, project_id, "read")
+        rows = c.execute(select(activity).where(activity.c.project_id == project_id).order_by(activity.c.created_at.desc()).limit(limit)).mappings().all()
+    names = usernames({r["user_id"] for r in rows})
+    return [dict(r, username=names.get(r["user_id"], "former member")) for r in rows]
+
+
+# ---------------- version history ----------------
+def add_snapshot(user_id, project_id, reason, summary):
+    with engine().begin() as c:
+        _own(c, user_id, project_id)
+        c.execute(insert(snapshots).values(id=str(uuid.uuid4()), project_id=project_id, user_id=user_id, reason=(reason or "")[:300], summary=pack(summary), created_at=now()))
+
+
+def list_snapshots(user_id, project_id, limit=100):
+    with engine().connect() as c:
+        _own(c, user_id, project_id, "read")
+        rows = c.execute(select(snapshots).where(snapshots.c.project_id == project_id).order_by(snapshots.c.created_at.desc()).limit(limit)).mappings().all()
+    names = usernames({r["user_id"] for r in rows})
+    return [dict(id=r["id"], reason=r["reason"], created_at=r["created_at"], username=names.get(r["user_id"], "former member"), summary=unpack(r["summary"])) for r in rows]
+
+
+# ---------------- benchmarks across projects ----------------
+def sector_benchmarks(business_type, min_users=3):
+    """Medians of the figures founders entered for this business type, across all accounts, anonymised.
+    Only shown when at least `min_users` different accounts contributed, so no one's numbers can be singled out."""
+    vals = {}; owners = set()
+    with engine().connect() as c:
+        rows = c.execute(select(projects.c.user_id, projects.c.state).where(projects.c.business_type == business_type)).all()
+    for uid, st_ in rows:
+        it = (unpack(st_) or {}).get("intake") or {}
+        got = False
+        for k in ("price", "fixed", "setup_budget", "marketing_budget_aed", "budget_aed"):
+            v = it.get(k)
+            if v: vals.setdefault(k, []).append(float(v)); got = True
+        if got: owners.add(uid)
+    if len(owners) < min_users: return dict(n_accounts=len(owners), enough=False, min_users=min_users)
+    import statistics
+    return dict(n_accounts=len(owners), enough=True, min_users=min_users,
+                medians={k: statistics.median(v) for k, v in vals.items() if len(v) >= min_users}, counts={k: len(v) for k, v in vals.items()})
+
+
+# ---------------- account ----------------
+def export_account(user_id):
+    """Everything stored for this account, for backups or moving elsewhere."""
+    out = dict(user=get_user(user_id), projects=[])
+    for p in list_projects(user_id):
+        if p["role"] != "owner": continue
+        full = load_project(user_id, p["id"])
+        out["projects"].append(dict(project=dict(id=full["id"], name=full["name"], state=full["state"], created_at=full["created_at"]),
+                                    evidence=list_evidence(user_id, p["id"]), hypotheses=list_hypotheses(user_id, p["id"]), actuals=list_actuals(user_id, p["id"])))
+    return out
+
+
+def delete_account(user_id):
+    """Delete the account, its projects with all their records, and its memberships of other projects."""
+    for p in list_projects(user_id):
+        if p["role"] == "owner": delete_project(user_id, p["id"])
+    with engine().begin() as c:
+        c.execute(delete(members).where(members.c.user_id == user_id))
+        c.execute(delete(kv).where(kv.c.key.like(f"%{user_id}%")))
+        c.execute(delete(users).where(users.c.id == user_id))

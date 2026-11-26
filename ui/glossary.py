@@ -36,6 +36,20 @@ TERMS = {
                              "80 of last month's 100 customers ordered again: 80% repeat rate."),
     "Hypothesis": ("A testable statement about your business with a number that would prove it right or wrong.",
                    "\"At least 30% of parents we interview will say finding a good Arabic tutor is a top-3 problem.\""),
+    "Beachhead segment": ("The one group of customers you serve first because they need you most and are easiest to reach. You expand once you win them.",
+                          "A tutoring app starts with Emirati parents in Abu Dhabi whose children are failing Arabic, before targeting all parents."),
+    "Say-do gap": ("People say they would buy far more often than they actually do. The app discounts stated interest before using it.",
+                   "Of 100 people who say \"yes, I'd buy\", typically fewer than half actually pay when asked to."),
+    "Validation score": ("A 0-100 summary of three parts: market attractiveness, customer appeal (simulated) and financial viability. It is capped at 49 when the plan misses your own money limits.",
+                         "Strong market (80) and appeal (70) but payback too slow: the score shows 49, not 75."),
+    "Safety standard": ("A plan counts as safe when at least 6 in 10 simulated futures pay back within your time limit. You choose the time; the standard is fixed so plans are comparable.",
+                        "Limit 36 months: if 7 in 10 futures pay back by month 36, the plan passes."),
+    "Simulated panel": ("Computer-generated customers drawn from UAE population patterns. Useful for spotting objections; never counted as evidence.",
+                        "40 simulated office workers react to your offer; 6 say they would buy."),
+    "Desk test": ("A check you can do alone, without talking to customers: competitor prices, supplier and rent quotes, search volumes, reviews, licence fees.",
+                  "Phoning three landlords in Business Bay for rent quotes is a desk test of your fixed costs."),
+    "Sensitivity": ("How much the answer changes when one input changes. Inputs the answer is sensitive to are the ones to check first.",
+                    "If halving the buyers within reach drops the payback chance from 60% to 20%, the plan is sensitive to market reach."),
     "Evidence confidence": ("How much of the plan rests on real evidence (sales, behaviour, customer feedback, sources) rather than guesses. AI estimates and simulations add nothing to it.",
                             "A plan built only on typical figures scores 0%; adding a landing-page test and three supplier quotes raises it."),
 }
@@ -62,3 +76,28 @@ def page():
         if q and q.lower() not in (k + t).lower(): continue
         with st.container(border=True):
             st.markdown(f"**{k}**  \n{t}  \n<span class='muted'>Example: {ex}</span>", unsafe_allow_html=True)
+
+
+ALIASES = {"TAM": "TAM / SAM / SOM", "SAM": "TAM / SAM / SOM", "SOM": "TAM / SAM / SOM", "NPV": "NPV", "CAC": "CAC", "ARPU": "ARPU", "churn": "Churn",
+           "payback": "Payback", "break-even": "Break-even", "break even": "Break-even", "evidence confidence": "Evidence confidence",
+           "beachhead segment": "Beachhead segment", "validation score": "Validation score", "safety standard": "Safety standard",
+           "simulated panel": "Simulated panel", "desk test": "Desk test", "fixed costs": "Fixed costs", "setup cost": "Setup cost",
+           "budget risk": "Chance of running out (budget risk)", "conversion": "Conversion rate", "hypothesis": "Hypothesis", "sensitivity": "Sensitivity"}
+
+
+def gloss(text_html, limit=None):
+    """Underline known terms in already-escaped HTML and show their plain definition on hover (first use of each)."""
+    import html as _h, re
+    out = text_html; done = set()
+    for word, key in sorted(ALIASES.items(), key=lambda kv: -len(kv[0])):
+        if key in done or key not in TERMS: continue
+        pat = re.compile(r"(?<![\w>/\"=-])(" + re.escape(word) + r")(?![\w<])", re.I if word.islower() else 0)
+        m = pat.search(out)
+        if not m: continue
+        # never inside a tag or an existing abbr
+        before = out[:m.start()]
+        if before.count("<") > before.count(">") or before.rfind("<abbr") > before.rfind("</abbr>"): continue
+        tip = _h.escape(TERMS[key][0], quote=True)
+        out = out[:m.start()] + f'<abbr class="gl" title="{tip}">{m.group(1)}</abbr>' + out[m.end():]
+        done.add(key)
+    return out

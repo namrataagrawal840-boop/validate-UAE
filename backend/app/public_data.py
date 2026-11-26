@@ -65,3 +65,21 @@ CATEGORY = {
 }
 HOUSEHOLD_SIZE = S(4.0, "Assumption: average people per household; replace with your own figure", 2025, "", "assumption")
 FAMILY_SHARE = S(.18, "Assumption: share of residents who are parents of school-age children", 2025, "", "assumption")
+
+
+def vintage():
+    """Oldest and newest year among the published figures, and those more than two years old (shown as a warning)."""
+    import datetime as dt
+    figs = []
+    def walk(x, name):
+        if isinstance(x, dict) and "year" in x and "value" in x: figs.append((name, x)); return
+        if isinstance(x, dict):
+            for k, v in x.items(): walk(v, f"{name} / {k}" if name else str(k))
+        elif isinstance(x, (list, tuple)):
+            for v in x: walk(v, name)
+    for nm, obj in list(globals().items()):
+        if nm.isupper(): walk(obj, nm.title().replace("_", " "))
+    yrs = [f["year"] for _, f in figs if f.get("year")]
+    this = dt.date.today().year
+    old = [dict(name=n, year=f["year"], source=f["source"]) for n, f in figs if f.get("year") and this - f["year"] > 2]
+    return dict(oldest=min(yrs) if yrs else None, newest=max(yrs) if yrs else None, checked="November 2026", stale=old)

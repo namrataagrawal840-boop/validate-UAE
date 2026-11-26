@@ -269,7 +269,7 @@ def synthesise(panel, result):
     vw = V.van_westendorp([p["van_westendorp"] for p in people]) if len(people) >= 5 else None
     acc = sum(p["wtp"] >= price for p in people) / n
     deb = panel.get("debate")
-    verdict = ("Strong interest" if adj >= .08 else "Some interest" if adj >= .03 else "Little interest")
+    verdict = ("Strong interest" if adj >= .15 else "Some interest" if adj >= .06 else "Little interest")
     headline = (f"{counts['yes']} of {n} simulated customers say they would buy and {counts['maybe']} might. Allowing for the usual gap between saying and doing, "
                 f"about {adj:.1%} would actually buy once they know about it (the buying model expects {panel['model_rate']:.1%}).")
     questions = []

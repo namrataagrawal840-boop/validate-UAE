@@ -4,7 +4,8 @@ import json
 import streamlit as st
 
 from ui import report
-from ui.common import ss, esc, pct, aed, kpi, math, section, soft, PASTEL, STATUS
+from ui.common import ss, esc, pct, aed, kpi, math, section, soft, PASTEL, STATUS, payback_line, rng
+from ui.loop import goto
 
 BANNER = {"launch": "mint", "pivot": "sky", "test": "butter", "stop": "rose"}
 
@@ -18,7 +19,7 @@ def score_bar(score, lo, hi):
 
 def go_to(section_name, key):
     if st.button(f"Go to {section_name}", key=key):
-        ss.section = section_name; st.rerun()
+        goto(section_name)
 
 
 def page(r, state):
@@ -30,33 +31,43 @@ def page(r, state):
     opts = ["launch", "test", "pivot", "stop"]
     st.markdown("".join(f'<span class="pill" style="{"background:" + PASTEL[BANNER[o]][0] + ";color:" + PASTEL[BANNER[o]][2] + ";border:1px solid " + PASTEL[BANNER[o]][1] if o == b["code"] else "opacity:.55"}">'
                         f'{"● " if o == b["code"] else ""}{STATUS[o][1]}</span>' for o in opts), unsafe_allow_html=True)
-    c = st.columns([1.2, 1.2, 1.2, 3])
+    c = st.columns([1.2, 1.4, 1.2, 2.6])
     with c[0]: math("decision", "How this is decided")
-    c[1].download_button("Download summary", report.summary_text(r) + "\n\nNext five actions:\n" + "\n".join(f"{i + 1}. {a['action']} ({a['why']})" for i, a in enumerate(b["next5"])),
-                         file_name="validateuae-decision.txt", width="stretch")
+    if c[1].button("📄 PDF report and slides", width="stretch"): goto("Share and report")
     c[2].download_button("Export project data", json.dumps(ss.state, default=str), file_name="validateuae-project.json", width="stretch")
     st.write("")
     c1, c2 = st.columns([1.3, 2])
     with c1:
         with st.container(border=True):
-            st.markdown("**Validation score**")
-            st.markdown(f'<span style="font-size:46px;font-weight:700;color:#2b3047">{round(b["score"])}</span><span class="muted"> / 100</span>'
+            from ui.glossary import gloss
+            v = r["validation"]
+            st.markdown(gloss("**Validation score**"), unsafe_allow_html=True)
+            cap = (f'<div style="font-size:13px;color:#a5505f">Capped at 49: the idea scores {round(v["uncapped"])} but the plan misses your own money limits.</div>'
+                   if v.get("capped") else "")
+            st.markdown(f'<span style="font-size:46px;font-weight:700;color:#2b3047">{round(b["score"])}</span><span class="muted"> / 100</span>{cap}'
                         f'<div class="muted">Confidence range {round(b["score_low"])} to {round(b["score_high"])}. The range narrows as real evidence comes in.</div>'
                         + score_bar(b["score"], b["score_low"], b["score_high"]), unsafe_allow_html=True)
+            for part in (v.get("parts") or {}).values():
+                st.markdown(f'<div style="display:flex;justify-content:space-between;font-size:13.5px;margin-top:6px"><span>{esc(part["name"])}</span><b>{round(part["score"])}</b></div>'
+                            f'<div style="height:6px;border-radius:4px;background:#eef0f6"><div style="height:6px;border-radius:4px;width:{part["score"]:.0f}%;background:#aab3f2"></div></div>'
+                            f'<div class="muted" style="font-size:11.5px">{esc(part["basis"])}</div>', unsafe_allow_html=True)
             math("validation")
     with c2:
         k = st.columns(3)
-        kpi(k[0], 0, f"Chance of paying back in {f['horizon']} months", pct(f["p_payback"]), f"You need {pct(L['min_payback'])}", "p_payback")
+        head, sub, ok = payback_line(r)
+        kpi(k[0], 0, "Typical payback", head, sub, "p_payback")
         kpi(k[1], 2, "Chance of needing more than your budget", pct(f["p_ruin"]), f"Your limit {pct(L['max_ruin'])}", "p_ruin")
         kpi(k[2], 1, "Evidence confidence", pct(b["confidence"]), f"{b['hypotheses']['validated']} validated · {b['hypotheses']['disproved']} disproved hypotheses", "evidence")
     from app import market_size as MZ
     mz = MZ.size(r, state.get("market_overrides"), state.get("panel"))
     y1, y2 = st.columns([5, 1.4])
-    y1.markdown(soft(f"<b>Market size (published UAE statistics):</b> TAM {aed(mz['tam']['aed'])}/yr ({mz['tam']['people']:,.0f} people) · "
-                     f"SAM {aed(mz['sam']['aed'])}/yr ({mz['sam']['people']:,.0f}) · SOM {aed(mz['som']['aed'])}/yr ({mz['som']['people']:,.0f} customers)", "sky"),
+    R = mz.get("ranges") or {}
+    rr = lambda k: rng(*R[k]) if k in R else f"{mz[k]['people']:,.0f}"
+    y1.markdown(soft(f"<b>Market size (published UAE statistics):</b> TAM {aed(mz['tam']['aed'])}/yr ({rr('tam')} people) · "
+                     f"SAM {aed(mz['sam']['aed'])}/yr ({rr('sam')}) · SOM {aed(mz['som']['aed'])}/yr ({rr('som')} customers)", "sky"),
                 unsafe_allow_html=True)
     if y2.button("Open Market size", key="g_mz", width="stretch"):
-        ss.section = "Market size"; st.rerun()
+        goto("Market size")
     pn = state.get("panel")
     if pn:
         from app import panel as PN
@@ -66,13 +77,13 @@ def page(r, state):
                          f"“{esc(ps['objections'][0]['title'] if ps['objections'] else 'none')}”. <span class='muted'>Simulated, so it is not counted as evidence.</span>", "lavender"),
                     unsafe_allow_html=True)
         if x2.button("Open Customer panel", key="g_panel", width="stretch"):
-            ss.section = "Customer panel"; st.rerun()
+            goto("Customer panel")
     else:
         x1, x2 = st.columns([5, 1.4])
         x1.markdown(soft("No research yet? Run the <b>Customer panel</b>: simulated UAE customers react to your idea, debate it and show the likely objections.", "lavender"),
                     unsafe_allow_html=True)
         if x2.button("Run a customer panel", key="g_panel0", width="stretch"):
-            ss.section = "Customer panel"; st.rerun()
+            goto("Customer panel")
     c1, c2 = st.columns(2)
     with c1:
         with st.container(border=True):
@@ -110,6 +121,6 @@ def page(r, state):
             x1, x2 = st.columns([5, 1.4])
             x1.markdown(f"**{i + 1}. {esc(a['action'])}**  \n<span class='muted'>{esc(a['why'])}</span>", unsafe_allow_html=True)
             if a["where"] != "Decision" and x2.button(f"Open {a['where']}", key=f"na{i}", width="stretch"):
-                ss.section = a["where"]; st.rerun()
+                goto(a["where"])
     with st.expander("The idea, the six checks and how simulated customers reacted"):
         report.tab_decision(r, state, show_header=False)

@@ -87,7 +87,25 @@ def size(result, overrides=None, panel=None):
     price = float(result["unit"]["arpu"])
     growth = PD.GROWTH.get(area, PD.GROWTH["All UAE"])
     proj = [dict(year=y, tam_people=tam_people * (1 + growth["value"]) ** y, sam_people=sam_people * (1 + growth["value"]) ** y) for y in range(0, 4)]
-    return dict(steps=steps, spend_per_month=spend, spend_meta=spend_meta, price_per_month=price,
+    # Ranges: each step's uncertainty depends on what kind of number it is. Official counts are tight, published
+    # surveys wider, our own assumptions widest. The category share uses its published low and high.
+    import math
+    U = dict(official=.03, published=.2, assumption=.35, yours=0, simulated=.5)
+    pre = [x for x in steps if x["key"] in ("population", "base", "audience")]
+    sd = math.sqrt(sum(math.log(1 + (.08 if x["key"] == "base" and x["kind"] == "assumption" else U.get(x["kind"], .3))) ** 2 for x in pre))
+    cat_ok = "category" not in ov or ov["category"] in (None, "")
+    t_lo = (n * lo if cat_ok else tam_people) * math.exp(-sd); t_hi = (n * hi if cat_ok else tam_people) * math.exp(sd)
+    t_lo, t_hi = min(t_lo, tam_people), max(t_hi, tam_people)
+    r_unc = (1, 1) if "reach" in ov and ov["reach"] not in (None, "") else (.6, 1.5)
+    s_lo, s_hi = min(sam_people, t_lo * reach * r_unc[0]), max(sam_people, t_hi * reach * r_unc[1])
+    cb = (f.get("bands") or {}).get("customers")
+    if cb and "som" not in ov:
+        som_lo, som_hi = min(som_people, float(cb["p10"][-1]), cap), min(max(som_people, float(cb["p90"][-1])), cap)
+    else:
+        som_lo, som_hi = som_people * .5, som_people * 1.5
+    return dict(steps=steps, spend_per_month=spend,
+                ranges=dict(tam=(t_lo, t_hi), sam=(s_lo, s_hi), som=(som_lo, som_hi),
+                            note="Ranges combine the uncertainty of each step: official counts ±3%, published surveys ±20%, model assumptions ±35-50%, and the spread of simulated futures for SOM."), spend_meta=spend_meta, price_per_month=price,
                 tam=dict(people=tam_people, aed=tam_people * spend * 12, range=(n * lo, n * hi)),
                 sam=dict(people=sam_people, aed=sam_people * price * 12), interested=dict(people=interested, aed=interested * price * 12),
                 som=dict(people=som_people, aed=som_people * price * 12, share_of_sam=som_people / sam_people if sam_people else 0,

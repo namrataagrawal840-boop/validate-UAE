@@ -23,7 +23,9 @@ def tab_decision(r, state, show_header=True):
         c[1].download_button("Download summary", summary, file_name="validateuae-summary.txt", width="stretch")
         c[2].download_button("Export project data", json.dumps(ss.state, default=str), file_name="validateuae-project.json", width="stretch", help="Your inputs and research as JSON")
         cols = st.columns(4)
-        kpi(cols[0], 0, f"Chance of paying back in {f['horizon']} months", pct(f["p_payback"]), f"You need at least {pct(L['min_payback'])}", "p_payback")
+        from ui.common import payback_line
+        _h, _s, _ = payback_line(r)
+        kpi(cols[0], 0, "Typical payback", _h, _s, "p_payback")
         kpi(cols[1], 1, "Chance of needing more than your budget", pct(f["p_ruin"]), f"Limit {pct(L['max_ruin'])} · budget {aed(L['budget'])}", "p_ruin")
         kpi(cols[2], 2, "Expected value (NPV)", aed(f["npv_mean"]), f"Bad {aed(f['npv_p10'])} · good {aed(f['npv_p90'])}", "npv")
         kpi(cols[3], 3, "Evidence strength", pct(r["evidence"]["strength"]), "Inputs backed by sources or measurements", "evidence")
@@ -382,7 +384,7 @@ def tab_lab(r, state):
     out = ss.get("lab_out")
     f = out["forecast"] if out else r["stages"]["forecast"]
     c = st.columns(4)
-    kpi(c[0], 0, "Payback chance", pct(f["p_payback"]), f"Need {pct(r['limits']['min_payback'])}")
+    kpi(c[0], 0, f"Paid back within {f['horizon']} months", pct(f["p_payback"]), f"Safety standard {pct(r['limits']['min_payback'])} of futures")
     kpi(c[1], 1, "Exceeds budget", pct(f["p_ruin"]), f"Limit {pct(r['limits']['max_ruin'])}")
     kpi(c[2], 2, "Expected NPV", aed(f["npv_mean"]))
     kpi(c[3], 3, "Typical payback", f"Month {round(f['payback_median'])}" if f["payback_median"] else "Beyond horizon")

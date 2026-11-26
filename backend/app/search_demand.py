@@ -217,3 +217,13 @@ def evidence_record(summary, sources, exact):
                 source_url="", collected_on=dt.date.today().isoformat(), geography="uae", sample_size=None,
                 verification="verified" if exact else "partly", confidence="medium",
                 limitations="Searches are not people (one person searches several phrases); volumes are country-level; " + ("Keyword Planner ranges are wide." if summary.get("ranges") else "Google Ads estimates."))
+
+
+def localise(summary, emirate):
+    """Google Ads volumes are for the whole UAE. Phrases like "near me" mostly come from where people live, so the
+    local share is estimated from the emirate's share of the UAE population (an assumption, labelled as such)."""
+    from . import public_data as PD
+    if not summary or not summary.get("total") or not emirate or emirate == "All UAE" or emirate not in PD.POPULATION: return summary
+    share = PD.POPULATION[emirate]["value"] / PD.POPULATION["All UAE"]["value"]
+    return dict(summary, local_area=emirate, local_share=share, local_total=summary["total"] * share,
+                local_note=f"About {share:.0%} of UAE residents live in {emirate} ({PD.POPULATION[emirate]['source']}); local searches are estimated with that share.")

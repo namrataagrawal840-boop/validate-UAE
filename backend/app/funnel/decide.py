@@ -55,39 +55,54 @@ def launch_options(inp, run, market_mult_by_price, focus_segment):
 
 
 # ---------- Step 5: one decision ----------
-def decide(base, options, limits, evidence, hard_blockers):
+def decide(base, options, limits, evidence, hard_blockers, desk=None):
+    """desk: dict(ok, covered, missing) - whether the inputs that move the answer most have each been checked by a desk
+    test or other real record. ValidateUAE works without customer feedback, so a plan whose key numbers are all
+    desk-checked can get a launch call even below the 35% evidence bar; the verdict then says so."""
     ok = lambda r: r["p_payback"] >= limits["min_payback"] and r["p_ruin"] <= limits["max_ruin"] and r["npv_mean"] > 0
     feasible = [o for o in options if ok(o)]
     best = max(feasible, key=lambda o: o["npv_mean"]) if feasible else max(options, key=lambda o: (o["p_payback"] - max(0, o["p_ruin"] - limits["max_ruin"]), o["npv_mean"]))
     reasons = []
     if hard_blockers:
         return dict(code="stop", label="Stop until the blockers are solved", best=best, reasons=[f"Hard limit: {b}" for b in hard_blockers], feasible=len(feasible))
-    weak_evidence = evidence["strength"] < 0.35
+    desk = desk or dict(ok=False, covered=[], missing=[])
+    desk_route = evidence["strength"] < 0.35 and desk["ok"]
+    weak_evidence = evidence["strength"] < 0.35 and not desk["ok"]
+    h = limits.get("horizon", 36); std = limits["min_payback"]
+    pbt = lambda r: (f"typical payback in month {round(r['payback_median'])}" if r.get("payback_median") else f"typical payback beyond {h} months") + \
+        f", {r['p_payback']:.0%} of futures paid back within {h} months"
     if ok(base):
         code = "test" if weak_evidence else "launch"
-        reasons.append(f"The plan meets your limits: {base['p_payback']:.0%} chance of payback (you asked for {limits['min_payback']:.0%}) and {base['p_ruin']:.0%} chance of needing more cash than your budget (limit {limits['max_ruin']:.0%}).")
+        reasons.append(f"The plan pays back within your {h} months in enough futures ({pbt(base)}; the safety standard is {std:.0%}) and the chance of needing more cash than your budget is {base['p_ruin']:.0%} (limit {limits['max_ruin']:.0%}).")
     elif feasible:
         code = "test" if weak_evidence else "pivot"
-        reasons.append(f"The plan as described misses your limits ({base['p_payback']:.0%} payback chance, {base['p_ruin']:.0%} chance of running out of budget), but “{best['name']}” meets them ({best['p_payback']:.0%} and {best['p_ruin']:.0%}).")
+        reasons.append(f"The plan as described misses your limits ({pbt(base)}; {base['p_ruin']:.0%} chance of running out of budget), but “{best['name']}” meets them ({pbt(best)}; {best['p_ruin']:.0%} budget risk).")
     elif best["p_payback"] >= limits["min_payback"] - .15:
         code = "test"
-        reasons.append(f"No tested option meets your limits, but the best (“{best['name']}”, {best['p_payback']:.0%} payback chance) is close. Evidence could tip it either way.")
+        reasons.append(f"No tested option pays back within {h} months often enough, but the best (“{best['name']}”: {pbt(best)}) is close to the {std:.0%} standard. Evidence could tip it either way.")
     else:
         code = "stop"
-        reasons.append(f"No tested option comes close: the best reaches only {best['p_payback']:.0%} payback chance against the {limits['min_payback']:.0%} you need.")
+        reasons.append(f"No tested option comes close: the best (“{best['name']}”) has {pbt(best)}, against the {std:.0%} needed.")
     if weak_evidence and code in ("test",) and (ok(base) or feasible):
-        reasons.append(f"Evidence is thin: only {evidence['strength']:.0%} of the weight behind the inputs comes from sources or measurements. Run the experiments below before committing money.")
+        reasons.append(f"Evidence is thin: only {evidence['strength']:.0%} of the weight behind the inputs comes from sources, quotes or measurements. Run the desk tests below before committing money.")
+    if weak_evidence and desk["missing"]:
+        reasons.append("Not yet desk-checked: " + ", ".join(desk["missing"]) + ". Checking these from the desk is enough for a decision; no customers are needed.")
     labels = {"launch": "Launch", "pivot": "Launch with changes", "test": "Not sure yet: test first", "stop": "Stop or rethink the idea"}
-    return dict(code=code, label=labels[code], best=best, reasons=reasons, feasible=len(feasible))
+    label = labels[code]
+    if desk_route and code in ("launch", "pivot"):
+        label += " (desk-checked)"
+        reasons.append("Decided on desk evidence: the numbers that move the answer most (" + ", ".join(desk["covered"]) + ") are checked against quotes, prices and market data, "
+                       "but no customer has paid yet. Start lean and compare the first months with the plan.")
+    return dict(code=code, label=label, best=best, reasons=reasons, feasible=len(feasible), desk_route=desk_route)
 
 
 # ---------- Step 6: where does the funnel leak? ----------
-LEAK_STAGE = {"market": ("Stage 4: will they buy?", "Landing-page test"), "arpu": ("Stage 5: how much will they spend?", "Pricing test at two prices"),
-              "churn": ("Stage 6: how long do they stay?", "Pilot with 20 paying customers for 2 months"), "cac": ("Stage 10: cost to win customers", "Small paid-ads test"),
-              "fixed": ("Finance: fixed costs", "Three real quotes for rent, staff and licence"), "setup": ("Finance: setup cost", "Fit-out and licence quotes"),
-              "var_pct": ("Finance: variable costs", "Supplier quotes and commission terms"), "capacity": ("Operations: capacity", "Time a trial day of operations"),
-              "q": ("Stage 7: word of mouth", "Referral test with first customers"), "p": ("Stage 7: marketing pull", "Small paid-ads test"),
-              "satisfaction": ("Stage 6: satisfaction", "Customer interviews after first use")}
+LEAK_STAGE = {"market": ("Stage 4: will they buy?", "Count competitors' reviews and measure search demand"), "arpu": ("Stage 5: how much will they spend?", "Check what 5 competitors charge"),
+              "churn": ("Stage 6: how long do they stay?", "Find a published churn figure for the category"), "cac": ("Stage 10: cost to win customers", "Look up ad click costs in Keyword Planner"),
+              "fixed": ("Finance: fixed costs", "Three written quotes for rent, staff and licence"), "setup": ("Finance: setup cost", "Fit-out and licence quotes"),
+              "var_pct": ("Finance: variable costs", "Supplier price lists and commission terms"), "capacity": ("Operations: capacity", "Time a trial run of your operation"),
+              "q": ("Stage 7: word of mouth", "Count competitors' reviews"), "p": ("Stage 7: marketing pull", "Look up ad click costs in Keyword Planner"),
+              "satisfaction": ("Stage 6: satisfaction", "Read public complaints about competitors")}
 
 
 def leak(sim):

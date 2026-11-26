@@ -9,15 +9,28 @@ from .. import priors as P
 WEIGHTS = dict(market=.20, customers=.25, competition=.15, money=.30, usability=.10)
 
 
-def validation_score(scores, evidence_strength, critic_flags, p_payback):
+def validation_score(scores, evidence_strength, critic_flags, p_payback, meets_limits=True):
     used = {k: w for k, w in WEIGHTS.items() if scores.get(k) is not None}
     tot = sum(used.values())
     score = sum(w / tot * scores[k] for k, w in used.items())
+    uncapped = score
+    if not meets_limits: score = min(score, 49.0)
     coin = 1 - abs(p_payback - .5) * 2 if .1 < p_payback < .9 else 0
     width = 6 + 20 * (1 - evidence_strength) + 2 * min(critic_flags, 5) + 10 * coin
-    return dict(score=float(score), low=float(max(0, score - width / 2)), high=float(min(100, score + width / 2)), width=float(width),
+    return dict(score=float(score), uncapped=float(uncapped), low=float(max(0, score - width / 2)), high=float(min(100, score + width / 2)), width=float(width),
                 weights={k: w / tot for k, w in used.items()},
                 verdict="Promising" if score >= 70 else "Possible, but risky" if score >= 50 else "Weak as it stands" if score >= 35 else "Not viable as described")
+
+
+def score_parts(scores, meets_limits):
+    """The single score mixes three different questions, so it is also shown as three named parts.
+    The overall score is capped at 49 when the plan misses the founder's own money limits: an attractive
+    idea that does not pay back in time is not a viable plan."""
+    avg = lambda *k: float(np.mean([scores[x] for x in k if scores.get(x) is not None]))
+    parts = dict(market=dict(name="Market attractiveness", score=avg("market", "competition"), basis="Published statistics and the competition scan"),
+                 customers=dict(name="Customer appeal", score=avg("customers"), basis="Simulated customers: a model, not real buyers"),
+                 money=dict(name="Financial viability", score=avg("money"), basis="Payback and budget risk across simulated futures"))
+    return dict(parts=parts, meets_limits=bool(meets_limits), capped=not meets_limits)
 
 
 # ---------- Market sizing: top-down vs bottom-up ----------

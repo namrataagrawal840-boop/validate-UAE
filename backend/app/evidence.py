@@ -17,6 +17,8 @@ TYPES = {  # key: (label, weight, is real-world evidence)
     "transactions": ("Observed transactions", 1.0, True),
     "behaviour": ("Observed customer behaviour", .85, True),
     "feedback": ("Direct customer feedback", .6, True),
+    "quote": ("Written quote or price list", .7, True),
+    "observation": ("Observed market data (listings, prices, reviews, searches)", .5, True),
     "secondary": ("Secondary research", .4, True),
     "ai": ("AI estimate", 0.0, False),
     "synthetic": ("Synthetic simulation", 0.0, False),
@@ -168,15 +170,15 @@ def gaps(areas, leak_rows=None, top=6):
         miss = 1 - x["confidence"]
         if miss < .15: continue
         rows.append(dict(area=a, name=x["name"], confidence=x["confidence"], priority=float(imp * miss), how=how.get(a, LEAK_STAGE.get(a, ("", "Collect evidence"))[1]),
-                         where="Validation lab" if a in LAB_AREAS else "Evidence ledger"))
+                         where="Run a test" if a in LAB_AREAS else "Evidence ledger"))
     rows.sort(key=lambda r: -r["priority"])
     return rows[:top]
 
 
-LAB_AREAS = {"market", "pain", "price", "cac", "churn"}  # tested with experiments; the others are documented with quotes or sources
-HOW = {"market": "Landing-page or pre-order test with real visitors", "pain": "10-15 customer interviews with the questionnaire in the lab",
-           "price": "Pricing test at two prices or a Van Westendorp survey", "cac": "Small paid-ads test with a fixed budget",
-           "churn": "Paid pilot with 15-20 customers for 2 months", "fixed": "Three written quotes for rent, staff and licence",
-           "var_pct": "Supplier quotes and delivery-platform commission terms", "setup": "Fit-out, equipment and licence quotes",
-           "capacity": "Time a trial day of operations", "competition": "Mystery-shop 3 competitors and record prices and features",
-        "regulation": "Confirm the licence activity with the economic department or free zone"}
+LAB_AREAS = {"market", "pain", "price", "cac", "churn", "fixed", "var_pct", "setup", "capacity", "regulation", "competition"}  # all have a desk test
+HOW = {"market": "Count competitors' reviews and measure Google search demand (desk tests)", "pain": "Read what people already complain about in public posts (desk test)",
+       "price": "Check what 5 competitors charge (desk test)", "cac": "Look up what an ad click costs in Keyword Planner (desk test)",
+       "churn": "Find a published churn figure for your category (desk test)", "fixed": "Three written rent quotes plus staff costs (desk test)",
+       "var_pct": "Supplier price lists and platform commission (desk test)", "setup": "Fit-out, equipment and licence quotes (desk test)",
+       "capacity": "Time a trial run of your operation (desk test)", "competition": "Check 5 competitors' prices and offers (desk test)",
+       "regulation": "Confirm the licence activity and fee with the authority (desk test)"}
