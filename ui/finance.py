@@ -45,6 +45,8 @@ def page(r, state):
         col.markdown(f'<div class="pcard" style="background:{bg};border-color:{bd}"><div style="font-weight:700;color:{fg};margin-bottom:6px">{name}</div>'
                      + "".join(f'<div style="display:flex;justify-content:space-between;font-size:14px;padding:2px 0"><span class="muted">{a}</span><b>{esc(b)}</b></div>' for a, b in lines)
                      + "</div>", unsafe_allow_html=True)
+    from ui import case_detail
+    case_detail.buttons(cols, r)
     c1, c2 = st.columns(2)
     with c1:
         with st.container(border=True):

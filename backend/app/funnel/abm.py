@@ -85,6 +85,8 @@ def simulate_abm(inp, pop, *, runs=100, seed=2027, horizon=36, shocks=2, cycles=
     payback = np.full(R, np.inf); op_be = np.full(R, np.inf); shock_count = np.zeros(len(SHOCK_KEYS), dtype=int)
     paths = {k: np.zeros((R, T)) for k in ["cash", "customers", "revenue", "profit", "unaware", "said_no", "left", "new", "costs", "marketing"]}
     src = dict(marketing=np.zeros(R), word_of_mouth=np.zeros(R), turned_away=np.zeros(R), unhappy_left=np.zeros(R), left=np.zeros(R))
+    events = [[] for _ in range(R)]                     # what happened in each future: (month, kind)
+    regime_path = np.zeros((R, T), dtype=np.int8); comp_path = np.zeros((R, T), dtype=bool)
     hist0 = np.zeros((T, N), dtype=np.int8) if journeys else None
     how0 = np.zeros(N, dtype=np.int8); when0 = np.full(N, -1); left_unhappy0 = np.zeros(N, dtype=bool)
 
@@ -102,6 +104,7 @@ def simulate_abm(inp, pop, *, runs=100, seed=2027, horizon=36, shocks=2, cycles=
         if hit.any():
             i = np.where(hit)[0]; rem[i, kind[i]] = np.maximum(rem[i, kind[i]], dur_k[kind[i]]); oneoff[i] = one_k[kind[i]]
             np.add.at(shock_count, kind[i], 1)
+            for r_ in i: events[r_].append((t + 1, SHOCK_KEYS[kind[r_]]))
         act = rem > 0
         dm = np.prod(np.where(act, dm_k, 1.0), 1); cm = np.prod(np.where(act, cm_k, 1.0), 1); fm = np.prod(np.where(act, fm_k, 1.0), 1)
         rem = np.maximum(rem - 1, 0)
@@ -114,7 +117,9 @@ def simulate_abm(inp, pop, *, runs=100, seed=2027, horizon=36, shocks=2, cycles=
         cust = state == 2; n_cust = cust.sum(1)
         provoked = (n_cust / np.maximum(potential, 1e-9) > COMP_SHARE) & (comp_left <= 0) & (rng.random(R) < comp_prob)
         comp_left = np.where(provoked, COMP_MONTHS, comp_left); comp_count += provoked
+        for r_ in np.flatnonzero(provoked): events[r_].append((t + 1, "competitor_reaction"))
         comp_on = comp_left > 0; comp_left = np.maximum(comp_left - 1, 0)
+        regime_path[:, t] = regime; comp_path[:, t] = comp_on
         dm = dm * np.where(comp_on, .8, 1.0); cm = cm * np.where(comp_on, 1.25, 1.0)
         # ---- experience and leaving ----
         util = n_cust / cap_agents
@@ -173,6 +178,8 @@ def simulate_abm(inp, pop, *, runs=100, seed=2027, horizon=36, shocks=2, cycles=
     out["ruin"] = (peak_need > budget) if budget else np.zeros(R, dtype=bool)
     out["p_ruin"] = float(np.mean(out["ruin"]))
     out["paths"] = paths if keep_paths else None
+    out["events"] = events; out["regime_path"] = regime_path; out["comp_path"] = comp_path
+    out["src_runs"] = {k: v * scale for k, v in src.items()}
     tot = src["marketing"] + src["word_of_mouth"]
     out["abm"] = dict(agents=int(N), people_per_agent=float(scale), friends_per_agent=K_FRIENDS,
                       wom_share=float(np.median(src["word_of_mouth"] / np.maximum(tot, 1))),

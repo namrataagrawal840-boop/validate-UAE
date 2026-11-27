@@ -35,11 +35,25 @@ def scenario(sim, i, budget, open_months):
     low_t = int(np.argmin(cash)); low = float(cash[low_t])
     out_t = _first(cash < -budget) if budget else None
     yearly = [float(rev[y * 12:(y + 1) * 12].sum()) for y in range(int(np.ceil(T / 12)))]
-    return dict(index=int(i), npv=float(sim["npv"][i]), setup=setup, pre_opening=pre_open, upfront=setup + pre_open, break_even_month=be, payback_month=payback, lowest_cash=low, lowest_cash_month=low_t + 1,
+    pa_get = lambda k: pa[k][i].round(1).tolist() if k in pa else None
+    story = None
+    if "events" in sim:
+        regime = sim["regime_path"][i]; names = P.REGIMES["names"]
+        story = dict(events=[dict(month=int(m), kind=k, label=(P.SHOCKS[k]["label"] if k in P.SHOCKS else "A competitor reacts to you (price cut or promotion)"),
+                                  months=(P.SHOCKS[k]["months"] if k in P.SHOCKS else None)) for m, k in sim["events"][i]],
+                     economy=[names[int(x)] for x in regime], competitor_active=sim["comp_path"][i].astype(int).tolist(),
+                     months_in_boom=int((regime == 1).sum()), months_in_downturn=int((regime == 2).sum()),
+                     sources={k: float(v[i]) for k, v in sim["src_runs"].items()})
+    lost = np.diff(np.concatenate([[0.0], pa["left"][i]])) if "left" in pa else None
+    return dict(index=int(i), npv=float(sim["npv"][i]), story=story,
+                totals=dict(revenue=float(rev.sum()), costs=float(costs.sum()), marketing=float(mk.sum()), profit=float(prof.sum()), acquired=float(new.sum()),
+                            customers_peak=float(cust.max()), customers_peak_month=int(np.argmax(cust)) + 1, final_cash=float(cash[-1]),
+                            lost=float(pa["left"][i][-1]) if "left" in pa else None, months=T), setup=setup, pre_opening=pre_open, upfront=setup + pre_open, break_even_month=be, payback_month=payback, lowest_cash=low, lowest_cash_month=low_t + 1,
                 runway_months=out_t - 1 if out_t else None, budget_lasts=out_t is None, revenue_by_year=yearly, customers_end=float(cust[-1]),
                 inputs={k: float(sim["inputs"][k][i]) for k in KEYS if k in sim["inputs"]},
                 monthly=dict(revenue=rev.round(0).tolist(), costs=costs.round(0).tolist(), marketing=mk.round(0).tolist(), profit=prof.round(0).tolist(),
-                             cash=cash.round(0).tolist(), customers=cust.round(1).tolist(), new_customers=new.round(1).tolist()))
+                             cash=cash.round(0).tolist(), customers=cust.round(1).tolist(), new_customers=new.round(1).tolist(),
+                             lost=None if lost is None else lost.round(1).tolist(), not_yet_reached=pa_get("unaware"), said_no=pa_get("said_no")))
 
 
 def scenarios(sim, budget, open_months):

@@ -179,8 +179,11 @@ def money(r, state):
                      f'<div style="font-size:24px;font-weight:700;margin:4px 0">{aed(s_["npv"])}</div><div class="muted" style="font-size:13.5px">'
                      f'{"Money back in month " + str(s_["payback_month"]) if s_["payback_month"] else "Money not back within " + str(h) + " months"} · '
                      f'{budget_text(s_)}</div></div>', unsafe_allow_html=True)
-    st.caption("Cases are three actual simulated futures, picked by their value (NPV) at the 10th, 50th and 90th percentile. "
-               "“Money back” = the first month cumulative cash, after setup and pre-opening costs, is back to zero; this is the one payback definition used everywhere.")
+    from ui import case_detail
+    case_detail.buttons(cols, r)
+    st.caption("Each case is one complete simulated future, picked by its total value (NPV, what the business is worth to you after paying back what you put in) "
+               "at the 10th, 50th and 90th percentile. They are ranked by value, not by speed, so a bigger-growing future can pay back later: open the details to see why. "
+               "“Money back” = the first month cumulative cash, after setup and pre-opening costs, is back to zero.")
     k = st.columns(3)
     head, sub, ok = payback_line(r)
     kpi(k[0], 0, "Typical payback", head, sub)
